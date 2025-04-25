@@ -25,12 +25,12 @@ PubSubClient mqtt_client(espClient);
 
 // Add rate limiting variables
 unsigned long lastMessageTime = 0;
-const unsigned long MESSAGE_INTERVAL = 100; // 100ms between messages
+const unsigned long MESSAGE_INTERVAL = 25; // 100ms between messages
 const size_t MAX_QUEUE_SIZE = 32;
 
 // Update MQTT callback
 void mqtt_callback(char* topic, byte* payload, unsigned int length) {
-    // Rate limiting
+    // Rate limiting check
     unsigned long currentTime = millis();
     if (currentTime - lastMessageTime < MESSAGE_INTERVAL) {
         return;
@@ -54,43 +54,30 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     encoderYDoc["topic"] = "Swerve_Robot/data/encoder_y";
     encoderYDoc["value"] = incomingDoc["encoder_y"].as<float>();
 
-    // Send each value separately via WebSocket
+    // Send each value via WebSocket
     if (ws.count() > 0) {
         String jsonString;
         
         serializeJson(imuDoc, jsonString);
         ws.textAll(jsonString);
-        Serial.println("Sending IMU: " + jsonString);
         
         jsonString = "";
         serializeJson(encoderXDoc, jsonString);
         ws.textAll(jsonString);
-        Serial.println("Sending Encoder X: " + jsonString);
         
         jsonString = "";
         serializeJson(encoderYDoc, jsonString);
         ws.textAll(jsonString);
-        Serial.println("Sending Encoder Y: " + jsonString);
     }
 }
 
-// Update WebSocket event handler
 void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {
     switch (type) {
         case WS_EVT_CONNECT:
-            Serial.printf("WebSocket client #%u connected\n", client->id());
-            client->ping();
             break;
         case WS_EVT_DISCONNECT:
-            Serial.printf("WebSocket client #%u disconnected\n", client->id());
             break;
         case WS_EVT_DATA:
-            // Rate limiting for incoming messages
-            if (millis() - lastMessageTime < MESSAGE_INTERVAL) {
-                return;
-            }
-            lastMessageTime = millis();
-            
             if (len > 0) {
                 char message[len + 1];
                 memcpy(message, data, len);
@@ -101,47 +88,50 @@ void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventTyp
     }
 }
 
-// Update setup() function
 void setup() {
     delay(1000);
     Serial.begin(115200);
 
-    // 1. Initialize SPIFFS
+    // Initialize SPIFFS
     if(!SPIFFS.begin(true)) {
-        Serial.println("SPIFFS Mount Failed");
-        return;
+        Serial.println("An error occurred while mounting SPIFFS");
+        return;  // Don't continue if SPIFFS fails
     }
+    Serial.println("SPIFFS mounted successfully");
 
-    // 2. Connect to WiFi
+    // Connect to WiFi
     WiFi.begin(ssid, password);
+    Serial.print("Connecting to WiFi");
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         Serial.print(".");
     }
-    Serial.println("\nWiFi connected");
-    Serial.println("IP address: " + WiFi.localIP().toString());
+    Serial.println("\nConnected to WiFi");
+    Serial.println("IP Address: " + WiFi.localIP().toString());
 
-    // 3. Setup MQTT
+    // Setup MQTT
     mqtt_client.setServer(mqtt_server, mqtt_port);
     mqtt_client.setCallback(mqtt_callback);
 
-    // 4. Setup WebSocket
+    // Setup WebSocket
     ws.onEvent(onWsEvent);
     server.addHandler(&ws);
 
-    // 5. Setup web routes
+    // Setup web routes with correct MIME types
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
         request->send(SPIFFS, "/index.html", "text/html");
     });
+
     server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){
         request->send(SPIFFS, "/style.css", "text/css");
     });
+
     server.on("/script.js", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(SPIFFS, "/script.js", "text/javascript");
+        request->send(SPIFFS, "/script.js", "application/javascript");
     });
 
-    // 6. Start server
     server.begin();
+    Serial.println("HTTP server started");
 }
 
 void reconnect_mqtt() {

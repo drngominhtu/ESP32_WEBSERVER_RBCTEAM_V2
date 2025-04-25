@@ -173,7 +173,11 @@ function addValueToGraph(graphContainer, valname, address) {
         label: valname,
         data: initialData,
         borderColor: color,
-        fill: false
+        fill: false,
+        pointRadius: 0,  // Remove points
+        pointHoverRadius: 5,  // Show points on hover
+        borderWidth: 2,  // Line thickness
+        tension: 0.4  // Make lines smoother
     });
     
     // Lưu thông tin về dataset
@@ -203,34 +207,44 @@ function getWatchR1Values() {
     return values;
 }
 
-// Hàm cập nhật đồ thị
+// Update the updateGraph function for faster updates
 function updateGraph(chartId) {
     const chart = charts[chartId];
     if (!chart || !graphData[chartId]) return;
 
     const currentValues = getWatchR1Values();
+    let hasNewData = false;
     
     Object.entries(graphData[chartId]).forEach(([valname, info]) => {
         const value = currentValues[valname];
         if (value !== undefined && value !== '--') {
             const dataset = chart.data.datasets[info.datasetIndex];
+            const numValue = parseFloat(value);
             
-            // Thêm giá trị mới và xóa giá trị cũ nếu vượt quá MAX_DATA_POINTS
-            dataset.data.push(parseFloat(value));
-            if (dataset.data.length > MAX_DATA_POINTS) {
-                dataset.data.shift();
+            if (!isNaN(numValue)) {
+                // Push new value
+                dataset.data.push(numValue);
+                if (dataset.data.length > MAX_DATA_POINTS) {
+                    dataset.data.shift();
+                }
+                hasNewData = true;
             }
         }
     });
 
-    // Cập nhật nhãn thời gian
-    const currentTime = new Date().toLocaleTimeString();
-    chart.data.labels.push(currentTime);
-    if (chart.data.labels.length > MAX_DATA_POINTS) {
-        chart.data.labels.shift();
-    }
+    if (hasNewData) {
+        // Update time labels
+        const currentTime = new Date().toLocaleTimeString();
+        chart.data.labels.push(currentTime);
+        if (chart.data.labels.length > MAX_DATA_POINTS) {
+            chart.data.labels.shift();
+        }
 
-    chart.update();
+        // Use requestAnimationFrame for smoother updates
+        requestAnimationFrame(() => {
+            chart.update('none'); // Use 'none' mode for fastest updates
+        });
+    }
 }
 
 // Hàm xử lý sự kiện cho biểu đồ mặc định
@@ -363,7 +377,10 @@ function setupGraphEventListeners(graphDiv, graphId) {
     if (startButton) {
         startButton.addEventListener('click', () => {
             if (!graphTimers[graphId]) {
-                graphTimers[graphId] = setInterval(() => updateGraph(graphId), 1000);
+                // Initial update immediately
+                updateGraph(graphId);
+                // Then set interval for continuous updates
+                graphTimers[graphId] = setInterval(() => updateGraph(graphId), 100); // Update every 100ms
                 console.log(`Started timer for graph ${graphId}`);
             }
         });
@@ -400,19 +417,53 @@ function createChart(canvasId) {
     const chart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: ['0s', '30s', '60s', '90s', '120s'],
+            labels: Array(MAX_DATA_POINTS).fill(''),
             datasets: []
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            elements: {
+                point: {
+                    radius: 0,
+                    hitRadius: 10,
+                    hoverRadius: 5
+                },
+                line: {
+                    tension: 0.4,
+                    borderWidth: 2
+                }
+            },
             scales: {
                 y: {
-                    beginAtZero: true
+                    beginAtZero: true,
+                    animation: {
+                        duration: 0 // Remove scale animations
+                    }
+                },
+                x: {
+                    animation: {
+                        duration: 0 // Remove scale animations
+                    }
                 }
+            },
+            animation: {
+                duration: 0 // Remove all animations
+            },
+            plugins: {
+                legend: {
+                    labels: {
+                        boxWidth: 2 // Smaller legend items
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'nearest'
             }
         }
     });
+    
     return chart;
 }
 
