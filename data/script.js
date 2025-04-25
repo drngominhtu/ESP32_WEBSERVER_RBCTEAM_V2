@@ -350,12 +350,57 @@ function addNewSubgraph() {
     console.log(`Created new graph with ID: ${graphId}`);
 }
 
-// Add new function to setup graph event listeners
+// Add new function to export chart data to CSV
+function exportToCSV(chartId) {
+    const chart = charts[chartId];
+    if (!chart) {
+        console.error(`Chart ${chartId} not found`);
+        return;
+    }
+
+    // Get all timestamps
+    const timestamps = chart.data.labels;
+
+    // Prepare CSV header
+    let csvContent = 'Timestamp';
+    chart.data.datasets.forEach(dataset => {
+        csvContent += ',' + dataset.label;
+    });
+    csvContent += '\n';
+
+    // Add data rows
+    for (let i = 0; i < timestamps.length; i++) {
+        // Add timestamp
+        csvContent += timestamps[i];
+        
+        // Add values from each dataset
+        chart.data.datasets.forEach(dataset => {
+            csvContent += ',' + (dataset.data[i] !== null ? dataset.data[i] : '');
+        });
+        csvContent += '\n';
+    }
+
+    // Create and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `chart_data_${chartId}_${new Date().toISOString()}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Update setupGraphEventListeners to include CSV export
 function setupGraphEventListeners(graphDiv, graphId) {
     const okButton = graphDiv.querySelector('.okbutton button');
     const startButton = graphDiv.querySelector('.exbutton li:nth-child(1)');
     const stopButton = graphDiv.querySelector('.exbutton li:nth-child(2)');
     const resetButton = graphDiv.querySelector('.exbutton li:nth-child(3)');
+    const exportButton = graphDiv.querySelector('.exbutton li:nth-child(4)'); // Export CSV button
 
     if (okButton) {
         okButton.addEventListener('click', () => {
@@ -407,6 +452,13 @@ function setupGraphEventListeners(graphDiv, graphId) {
                 chart.update();
                 console.log(`Reset graph ${graphId}`);
             }
+        });
+    }
+
+    if (exportButton) {
+        exportButton.addEventListener('click', () => {
+            exportToCSV(graphId);
+            console.log(`Exporting CSV for graph ${graphId}`);
         });
     }
 }
