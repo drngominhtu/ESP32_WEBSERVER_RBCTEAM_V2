@@ -1,0 +1,574 @@
+/* Style cho header */
+header {
+    background-color: #333;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Style cho logo */
+.logo {
+    width: 200px;
+    height: 50px;
+    background-color: #fff; /* để nhìn thấy được logo */
+}
+
+/* Style cho đoạn văn trong header */
+.headpara {
+    flex: 1;
+    margin-left: 20px;
+    color: #fff;
+}
+
+/* Style cho phần dưới (bottom section) */
+.bottom {
+    display: flex;
+    margin-top: 20px;
+    gap: 20px;
+    padding-right: 120px; /* Thêm khoảng cách lề phải */
+}
+
+/* Style cho sidebar */
+.sidebar {
+    width: 120px;
+    padding: 15px;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+}
+
+/* Style cho các mục trong sidebar */
+.sidebar ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.sidebar li {
+    padding: 10px 12px;
+    margin: 0;
+    cursor: pointer;
+    border-radius: 6px;
+    background-color: #333;
+    color: white;
+    text-align: center;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    font-size: 14px;
+}
+
+.sidebar li:hover {
+    background-color: #444;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.sidebar li:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Style cho biểu đồ chính */
+.graph {
+    flex: 1;
+    min-width: 0; /* Allow flexible resizing */
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: row; /* Arrange child elements horizontally */
+    gap: 20px; /* Add spacing between subgraphs */
+    padding: 20px;
+    min-height: 600px; /* Double the minimum height */
+    overflow-y: auto; /* Enable vertical scrolling */
+    max-height: 80vh; /* Limit the height of the graph container */
+    width: calc(100% - 150px); /* Increase width to occupy more space */
+    margin-left: auto; /* Adjust alignment */
+    margin-right: auto; /* Center the graph */
+}
+
+/* Style cho các biểu đồ con */
+.subgraph {
+    flex: 1; /* Allow subgraphs to take equal space */
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-height: 80vh; /* Giới hạn chiều cao */
+    overflow-y: auto; /* Cho phép cuộn khi có nhiều graph */
+}
+
+/* Style cho container của subgraph1 */
+.subgraph1 {
+    display: flex;
+    flex-direction: column; /* Stack subgraphs vertically */
+    gap: 20px; /* Add spacing between subgraphs */
+    max-height: 80vh; /* Limit height */
+    overflow-y: auto; /* Enable vertical scrolling */
+    padding-right: 10px; /* Add padding for scrollbar */
+    width: calc(100% - 50px); /* Increase width to occupy more space */
+    margin-left: auto; /* Center alignment */
+    margin-right: auto; /* Center alignment */
+}
+
+.subgraph1_1 {
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    background-color: #ffffff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* Style cho giao diện biểu đồ (graphUI) */
+.graphUI {
+    display: flex;
+    flex-direction: column;
+    min-height: 600px;
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+    position: relative;
+    gap: 15px; /* Thêm khoảng cách giữa các phần tử */
+    position: relative;
+}
+
+/* Style cho container của biểu đồ */
+.graph-container {
+    flex: 1; /* Cho phép graph-container mở rộng chiếm hết không gian còn lại */
+    min-height: 400px; /* Đặt chiều cao tối thiểu */
+    width: 100%;
+    position: relative;
+    margin-bottom: 0; /* Bỏ margin bottom */
+}
+
+/* Style cho canvas */
+.graph-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+canvas {
+    width: 100% !important; /* Đảm bảo canvas chiếm toàn bộ chiều rộng */
+    height: 100% !important; /* Đảm bảo canvas chiếm toàn bộ chiều cao */
+}
+
+/* Style cho trục Y */
+.y-axis {
+    width: 80px; /* Tăng độ rộng để chứa cả labels và values */
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Style cho nhãn trục Y */
+.y-labels {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding-right: 10px;
+    font-size: 12px;
+    color: #666;
+}
+
+/* Style cho nhãn giá trị */
+.value-labels {
+    padding: 10px 5px;
+    border-top: 1px solid #eee;
+}
+
+.val-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 5px;
+    font-size: 12px;
+}
+
+.color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.color-dot.val1 { background-color: #2196F3; }
+.color-dot.val2 { background-color: #4CAF50; }
+.color-dot.val3 { background-color: #FF5722; }
+
+/* Style cho khu vực vẽ biểu đồ */
+.graph-content {
+    flex: 1;
+    position: relative;
+    margin: 0 10px;
+    border-left: 1px solid #ccc;
+    border-bottom: 1px solid #ccc;
+}
+
+/* Style cho lưới biểu đồ */
+.grid {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-size: 60px 50px;
+    background-image:
+        linear-gradient(to right, #f0f0f0 1px, transparent 1px),
+        linear-gradient(to bottom, #f0f0f0 1px, transparent 1px);
+}
+
+/* Style cho khu vực vẽ đường */
+.plot-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.line {
+    position: absolute;
+    width: 100%;
+    height: 2px;
+}
+
+.val1-line {
+    background-color: #2196F3;
+    top: 30%;
+}
+
+.val2-line {
+    background-color: #4CAF50;
+    top: 50%;
+}
+
+.val3-line {
+    background-color: #FF5722;
+    top: 70%;
+}
+
+/* Style cho trục X */
+.x-axis {
+    position: absolute;
+    bottom: 0; /* Đặt trục X ở đúng vị trí 0 của trục Y */
+    left: 80px; /* Căn chỉnh để trùng với độ rộng của trục Y */
+    right: 0;
+}
+
+/* Style cho nhãn trục X */
+.x-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #666;
+    padding-top: 5px;
+    margin-left: -80px; /* Dịch chuyển nhãn để căn chỉnh với trục Y */
+}
+
+/* Thêm style cho đường thẳng mẫu */
+.plot-area::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(45deg, transparent, transparent 49.9%, #2196F3 50%, #2196F3 50.1%, transparent 51%);
+    opacity: 0.5;
+}
+
+/* Style cho nút thêm giá trị */
+.addvalsbutton {
+    width: 100%;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: auto; /* Đẩy xuống dưới */
+}
+
+/* Style cho các nút điều khiển */
+.exbutton {
+    width: 100%;
+    padding: 0;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+}
+
+.exbutton ul {
+    display: flex;
+    list-style: none;
+    padding: 10px;
+    margin: 0;
+    gap: 8px;
+    justify-content: space-between;
+}
+
+.exbutton li {
+    padding: 8px 15px;
+    background-color: #333;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    flex: 1;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.exbutton li:hover {
+    background-color: #444;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Style cho input fields */
+.addvalgraph {
+    flex: 1;
+    display: flex;
+    gap: 15px;
+}
+
+.input-field {
+    flex: 1;
+    display: flex; /* Bố trí ngang */
+    gap: 15px;
+}
+
+.input-field input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* Style cho nút OK */
+.okbutton {
+    width: 50px; /* Giảm chiều rộng nút OK */
+    align-self: flex-end; /* Căn theo cuối của input fields */
+}
+
+.okbutton button {
+    min-width: 60px;
+    height: 35px;
+    width: 100%;
+    padding: 4px 8px; /* Giảm padding */
+    height: 24px; /* Cố định chiều cao bằng với input */
+    background-color: #333;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.okbutton button:hover {
+    background-color: #444;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.okbutton button:active {
+    transform: translateY(0);
+}
+
+/* Style cho phần table */
+.table {
+    flex: 0.35; /* Giảm tỷ lệ chiều rộng */
+    min-width: 0; /* Cho phép co giãn */
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    padding: 15px; /* Giảm padding */
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* Giảm gap */
+}
+
+.exbutton {
+    padding: 0 10px; /* Giảm padding */
+    height: 30px; /* Thêm chiều cao cố định */
+}
+
+.exbutton ul {
+    display: flex;
+    list-style: none;
+    padding: 0;
+    gap: 8px;
+    justify-content: space-between;
+    height: 100%; /* Chiều cao 100% của parent */
+}
+
+.exbutton li {
+    padding: 3px 10px; /* Giảm padding trên dưới */
+    background-color: #333;
+    color: white;
+    border-radius: 3px; /* Giảm border radius cho phù hợp */
+    cursor: pointer;
+    font-size: 12px; /* Giảm font size */
+    flex: 1;
+    text-align: center;
+    white-space: nowrap;
+    display: flex;
+    align-items: center; /* Căn giữa theo chiều dọc */
+    justify-content: center; /* Căn giữa theo chiều ngang */
+}
+
+.exbutton li:hover {
+    background-color: #444;
+}
+
+.table1, .table2 {
+    padding: 12px; /* Giảm padding */
+    background-color: #fff;
+    border-radius: 8px;
+    flex: 1;
+}
+
+.table-title {
+    font-size: 14px;
+    color: #333;
+    margin: 0 0 10px 0;
+    font-weight: 500;
+    padding-left: 2px;
+}
+
+.table1 table, .table2 table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: white;
+}
+
+.table1 th, .table2 th {
+    background-color: #333;
+    color: white;
+    padding: 12px;
+    text-align: left;
+    font-weight: 500;
+}
+
+.table1 td, .table2 td {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    background-color: white; /* Ensure background is always white */
+    color: black; /* Ensure text is always black */
+    transition: none; /* Remove any transitions */
+}
+
+/* Ensure text is always clear and visible */
+.table1 tbody tr td, .table2 tbody tr td {
+    font-weight: normal;
+    opacity: 1;
+}
+
+.table1 tr:last-child td, .table2 tr:last-child td {
+    border-bottom: none;
+}
+
+.table1 tbody tr:hover, .table2 tbody tr:hover {
+    background-color: #f5f5f5;
+}
+
+/* Thêm border cho cột đầu tiên */
+.table1 th:first-child, 
+.table2 th:first-child,
+.table1 td:first-child,
+.table2 td:first-child {
+    border-right: 1px solid #eee;
+}
+
+/* Căn chỉnh độ rộng cột cho bảng */
+.table1 th, .table2 th,
+.table1 td, .table2 td {
+    width: 33.33%; /* Đặt chiều rộng cho mỗi cột bằng nhau */
+}
+
+/* Thêm padding cho các ô trong bảng */
+.table1 td, .table2 td {
+    padding: 10px; /* Giữ nguyên padding */
+    border-bottom: 1px solid #eee;
+}
+
+/* Đảm bảo tiêu đề bảng có cùng chiều rộng */
+.table1 th, .table2 th {
+    padding: 12px; /* Giữ nguyên padding */
+    text-align: left;
+    font-weight: 500;
+}
+
+.addgraphbutton {
+    text-align: center;
+    margin: 20px 0;
+}
+
+.addgraphbutton button {
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.addgraphbutton button:hover {
+    background-color: #45a049;
+}
+
+/* Style cho nút xóa biểu đồ */
+.delete-graph-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 24px;
+    height: 24px;
+    background-color: #ff4444;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: all 0.3s ease;
+    opacity: 0.8;
+    z-index: 10;
+}
+
+.delete-graph-btn:hover {
+    opacity: 1;
+    transform: scale(1.1);
+    background-color: #ff0000;
+}
+
+.delete-graph-btn:active {
+    transform: scale(0.95);
+}
+
+/* Style cho footer */
+footer {
+    background-color: #222; /* Màu tối cho footer */
+    color: #fff; /* Màu chữ sáng */
+    text-align: center;
+    padding: 10px 0;
+}

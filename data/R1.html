@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Thông tin meta và liên kết CSS -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R1 Page</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <main>
+        <!-- Header -->
+        <header>
+            <div class="logo">
+            </div>
+            <div class="headpara">
+            </div>
+        </header>
+
+        <!-- Phần nội dung chính -->
+        <div class="bottom">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <ul>
+                    <li onclick="location.href='index.html'">OVERALL</li>
+                    <li>R1</li>
+                    <li onclick="location.href='R2.html'">R2</li>
+                </ul>
+            </div>
+
+            <!-- Khu vực biểu đồ -->
+            <div class="graph">
+                <div class="subgraph1">
+                    <!-- First graph template -->
+                    <div class="subgraph1_1">
+                        <div class="graphUI">
+                            <div class="graph-container">
+                                <canvas id="myLineChart_1"></canvas>
+                            </div>
+                            <div class="addvalsbutton">
+                                <div class="addvalgraph">
+                                    <div class="input-field">
+                                        <label for="valname_1">#Valname</label>
+                                        <input type="text" id="valname_1" placeholder="Enter value name">
+                                    </div>
+                                    <div class="input-field">
+                                        <label for="address_1">#Address</label>
+                                        <input type="text" id="address_1" placeholder="Enter address">
+                                    </div>
+                                </div>
+                                <div class="okbutton">
+                                    <button>OK</button>
+                                </div>
+                            </div>
+                            <div class="exbutton">
+                                <ul>
+                                    <li>Start</li>
+                                    <li>Stop</li>
+                                    <li>Reset</li>
+                                    <li>Export CSV file</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- New subgraphs will be appended here -->
+                </div>
+
+                <!-- Bảng điều khiển -->
+                <div class="subgraph2">
+                    <div class="table">
+                        <div class="table1">
+                            <h3 class="table-title">WatchR1</h3>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Variable</th>
+                                        <th>Address</th>
+                                        <th>Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>IMU</td>
+                                        <td>Swerve_Robot/data/imu</td>
+                                        <td>--</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Encoder X</td>
+                                        <td>Swerve_Robot/data/encoder_x</td>
+                                        <td>--</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="addgraphbutton">
+                        <button>ADD NEW GRAPH</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; Designed by Dr.ngominhtu - AML_RBCTEAM25</p>
+    </footer>
+
+    <!-- Liên kết file JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>
