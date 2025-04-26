@@ -144,7 +144,13 @@ function generateRandomColor() {
 // Thêm biến để quản lý timer và dữ liệu
 let graphTimers = {};
 let graphData = {};
-const MAX_DATA_POINTS = 50; // Số điểm tối đa trên đồ thị
+const MAX_DATA_POINTS = 50; // Số điểm tối đa hiển thị trên đồ thị khi đang ghi dữ liệu
+// Thêm biến để theo dõi thời gian
+let graphStartTimes = {}; // Lưu thời điểm bắt đầu cho mỗi biểu đồ
+// Thêm biến để lưu dữ liệu log từ Start đến Stop
+let graphLogData = {}; // Lưu dữ liệu log cho mỗi biểu đồ
+// Thêm biến để theo dõi trạng thái hiển thị đồ thị
+let graphDisplayMode = {}; // 'live' hoặc 'full'
 
 // Sửa hàm addValueToGraph
 function addValueToGraph(graphContainer, valname, address) {
@@ -158,8 +164,27 @@ function addValueToGraph(graphContainer, valname, address) {
 
     // Kiểm tra xem valname có trong bảng WatchR1 không
     const watchR1Values = getWatchR1Values();
-    if (!watchR1Values[valname]) {
-        alert('Vui lòng chọn giá trị từ bảng WatchR1');
+    console.log("Available values:", watchR1Values);
+    console.log("Trying to add value:", valname);
+    
+    // Kiểm tra nếu valname không có trong bảng, có thể người dùng đã nhập tên chính xác từ bảng
+    const table = document.querySelector('.table1 tbody');
+    let foundInTable = false;
+    
+    if (table) {
+        Array.from(table.rows).forEach(row => {
+            const name = row.cells[0].textContent.trim();
+            if (name.toLowerCase() === valname.toLowerCase()) {
+                // Dùng tên chính xác từ bảng
+                valname = name;
+                foundInTable = true;
+                console.log(`Found matching value in table: ${valname}`);
+            }
+        });
+    }
+    
+    if (!foundInTable) {
+        alert(`Vui lòng chọn một trong các giá trị từ bảng WatchR1: IMU, Encoder X, Encoder Y`);
         return;
     }
 
@@ -191,6 +216,9 @@ function addValueToGraph(graphContainer, valname, address) {
     
     chart.update();
     console.log(`Added new dataset to chart ${chartId} for ${valname}`);
+    
+    // Thông báo cho người dùng
+    alert(`Đã thêm ${valname} vào biểu đồ. Bấm Start để bắt đầu vẽ biểu đồ.`);
 }
 
 // Hàm lấy giá trị từ bảng WatchR1
@@ -199,9 +227,13 @@ function getWatchR1Values() {
     const table = document.querySelector('.table1 tbody');
     if (table) {
         Array.from(table.rows).forEach(row => {
-            const name = row.cells[0].textContent;
-            const value = row.cells[2].textContent;
+            // Lấy tên chính xác (cả chữ hoa, chữ thường)
+            const name = row.cells[0].textContent.trim();
+            const value = row.cells[2].textContent.trim();
             values[name] = value;
+            
+            // Debug: hiển thị giá trị đang đọc
+            console.log(`Reading value from table: ${name} = ${value}`);
         });
     }
     return values;
@@ -215,6 +247,30 @@ function updateGraph(chartId) {
     const currentValues = getWatchR1Values();
     let hasNewData = false;
     
+    // Tính thời gian đã trôi qua từ lúc bắt đầu (tính bằng giây)
+    const currentTime = graphStartTimes[chartId] ? 
+        ((Date.now() - graphStartTimes[chartId]) / 1000).toFixed(1) + 's' : 
+        '0.0s';
+    
+    // Kiểm tra xem có dataset nào trong graphData[chartId] không
+    if (Object.keys(graphData[chartId]).length === 0) {
+        console.log(`No datasets added to graph ${chartId}. Add a value before starting.`);
+        return;
+    }
+    
+    // Chuẩn bị dữ liệu cho log nếu cần
+    if (graphTimers[chartId] && !graphLogData[chartId]) {
+        graphLogData[chartId] = {
+            labels: [],
+            datasets: {}
+        };
+        
+        // Khởi tạo datasets cho từng loại dữ liệu
+        Object.keys(graphData[chartId]).forEach(valname => {
+            graphLogData[chartId].datasets[valname] = [];
+        });
+    }
+    
     Object.entries(graphData[chartId]).forEach(([valname, info]) => {
         const value = currentValues[valname];
         if (value !== undefined && value !== '--') {
@@ -222,27 +278,38 @@ function updateGraph(chartId) {
             const numValue = parseFloat(value);
             
             if (!isNaN(numValue)) {
-                // Push new value
-                dataset.data.push(numValue);
+                // Push new value - làm tròn đến 2 chữ số thập phân
+                const roundedValue = parseFloat(numValue.toFixed(2));
+                dataset.data.push(roundedValue);
                 if (dataset.data.length > MAX_DATA_POINTS) {
                     dataset.data.shift();
                 }
+                
+                // Lưu giá trị vào log data nếu đang ghi log - cũng làm tròn đến 2 chữ số thập phân
+                if (graphTimers[chartId] && graphLogData[chartId]) {
+                    graphLogData[chartId].datasets[valname].push(roundedValue);
+                }
+                
                 hasNewData = true;
             }
         }
     });
 
     if (hasNewData) {
-        // Update time labels
-        const currentTime = new Date().toLocaleTimeString();
+        // Cập nhật nhãn trục thời gian bằng số giây đã trôi qua
         chart.data.labels.push(currentTime);
         if (chart.data.labels.length > MAX_DATA_POINTS) {
             chart.data.labels.shift();
         }
+        
+        // Lưu nhãn thời gian vào log data
+        if (graphTimers[chartId] && graphLogData[chartId]) {
+            graphLogData[chartId].labels.push(currentTime);
+        }
 
-        // Use requestAnimationFrame for smoother updates
+        // Sử dụng requestAnimationFrame để cập nhật mượt hơn
         requestAnimationFrame(() => {
-            chart.update('none'); // Use 'none' mode for fastest updates
+            chart.update('none'); // Sử dụng 'none' mode để cập nhật nhanh nhất
         });
     }
 }
@@ -358,40 +425,61 @@ function exportToCSV(chartId) {
         return;
     }
 
-    // Get all timestamps
-    const timestamps = chart.data.labels;
+    // Kiểm tra xem có dữ liệu log không
+    if (!graphLogData[chartId] || graphLogData[chartId].labels.length === 0) {
+        alert("Không có dữ liệu log nào được ghi lại. Vui lòng bấm Start và sau đó Stop để ghi lại dữ liệu.");
+        console.log("No log data available for export");
+        return;
+    }
 
-    // Prepare CSV header
+    // Lấy dữ liệu log đã lưu từ Start đến Stop
+    const logData = graphLogData[chartId];
+    const timestamps = logData.labels;
+    const datasets = logData.datasets;
+
+    // Chuẩn bị header của CSV
     let csvContent = 'Timestamp';
-    chart.data.datasets.forEach(dataset => {
-        csvContent += ',' + dataset.label;
+    Object.keys(datasets).forEach(datasetName => {
+        csvContent += ',' + datasetName;
     });
     csvContent += '\n';
 
-    // Add data rows
+    // Thêm các hàng dữ liệu
     for (let i = 0; i < timestamps.length; i++) {
-        // Add timestamp
+        // Thêm timestamp
         csvContent += timestamps[i];
         
-        // Add values from each dataset
-        chart.data.datasets.forEach(dataset => {
-            csvContent += ',' + (dataset.data[i] !== null ? dataset.data[i] : '');
+        // Thêm giá trị từ mỗi dataset
+        Object.keys(datasets).forEach(datasetName => {
+            const dataValues = datasets[datasetName];
+            if (i < dataValues.length && dataValues[i] !== null) {
+                // Đảm bảo xuất giá trị với 2 chữ số thập phân
+                const formattedValue = parseFloat(dataValues[i]).toFixed(2);
+                csvContent += ',' + formattedValue;
+            } else {
+                csvContent += ',';
+            }
         });
         csvContent += '\n';
     }
 
-    // Create and trigger download
+    // Tạo và kích hoạt tải xuống
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/:/g, '-');
+    
     link.setAttribute('href', url);
-    link.setAttribute('download', `chart_data_${chartId}_${new Date().toISOString()}.csv`);
+    link.setAttribute('download', `log_data_${chartId}_${timestamp}.csv`);
     link.style.visibility = 'hidden';
     
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    
+    console.log(`Exported ${timestamps.length} log records to CSV file`);
 }
 
 // Update setupGraphEventListeners to include CSV export
@@ -421,12 +509,31 @@ function setupGraphEventListeners(graphDiv, graphId) {
 
     if (startButton) {
         startButton.addEventListener('click', () => {
+            console.log(`Attempting to start graph ${graphId}`);
+            
+            // Kiểm tra xem đã có dataset nào được thêm vào chưa
+            if (!graphData[graphId] || Object.keys(graphData[graphId]).length === 0) {
+                alert("Vui lòng thêm ít nhất một giá trị vào biểu đồ trước khi bấm Start (sử dụng nút OK)");
+                console.log("Cannot start: No datasets added to the graph");
+                return;
+            }
+            
             if (!graphTimers[graphId]) {
-                // Initial update immediately
-                updateGraph(graphId);
-                // Then set interval for continuous updates
-                graphTimers[graphId] = setInterval(() => updateGraph(graphId), 100); // Update every 100ms
-                console.log(`Started timer for graph ${graphId}`);
+                // Thiết lập thời điểm bắt đầu khi bấm nút Start
+                graphStartTimes[graphId] = Date.now();
+                
+                // QUAN TRỌNG: KHÔNG xóa dữ liệu hiện có - chỉ thiết lập thời gian mới
+                const chart = charts[graphId];
+                if (chart) {
+                    // Chúng ta không reset dữ liệu:
+                    // chart.data.labels = Array(MAX_DATA_POINTS).fill('');
+                    
+                    // Initial update immediately
+                    updateGraph(graphId);
+                    // Then set interval for continuous updates
+                    graphTimers[graphId] = setInterval(() => updateGraph(graphId), 100); // Update every 100ms
+                    console.log(`Started timer for graph ${graphId} at time 0 (giữ lại dữ liệu cũ)`);
+                }
             }
         });
     }
@@ -437,6 +544,17 @@ function setupGraphEventListeners(graphDiv, graphId) {
                 clearInterval(graphTimers[graphId]);
                 delete graphTimers[graphId];
                 console.log(`Stopped timer for graph ${graphId}`);
+                
+                // Thông báo cho người dùng rằng dữ liệu log đã được lưu
+                if (graphLogData[graphId] && graphLogData[graphId].labels.length > 0) {
+                    const numDataPoints = graphLogData[graphId].labels.length;
+                    console.log(`Đã lưu ${numDataPoints} bản ghi dữ liệu cho biểu đồ ${graphId}`);
+                    
+                    // Hiển thị toàn bộ đồ thị
+                    displayFullGraph(graphId);
+                    
+                    alert(`Đã dừng ghi dữ liệu và hiển thị toàn bộ ${numDataPoints} điểm dữ liệu. Bấm "Export CSV file" để tải xuống.`);
+                }
             }
         });
     }
@@ -445,12 +563,28 @@ function setupGraphEventListeners(graphDiv, graphId) {
         resetButton.addEventListener('click', () => {
             const chart = charts[graphId];
             if (chart) {
+                // Reset biểu đồ và đồng hồ đếm thời gian
                 chart.data.labels = Array(MAX_DATA_POINTS).fill('');
                 chart.data.datasets.forEach(dataset => {
                     dataset.data = Array(MAX_DATA_POINTS).fill(null);
                 });
+                
+                // Đặt lại thời gian bắt đầu và dữ liệu log
+                delete graphStartTimes[graphId];
+                delete graphLogData[graphId];
+                
+                // Đặt lại chế độ hiển thị về mặc định
+                graphDisplayMode[graphId] = 'live';
+                
+                // Đặt lại tùy chọn hiển thị trục x về mặc định
+                chart.options.scales.x = {
+                    animation: {
+                        duration: 0 // Remove scale animations
+                    }
+                };
+                
                 chart.update();
-                console.log(`Reset graph ${graphId}`);
+                console.log(`Reset graph ${graphId} completely`);
             }
         });
     }
@@ -636,9 +770,9 @@ function updateWatchR1Table(data) {
         const row = table.rows[rowIndex];
         if (row) {
             const valueCell = row.cells[2];
-            // Format number to 8 decimal places if it's a number
+            // Format số thành 2 chữ số sau dấu thập phân
             const value = typeof data.value === 'number' ? 
-                         data.value.toFixed(8) : 
+                         data.value.toFixed(2) : 
                          data.value;
             valueCell.textContent = value;
             
@@ -656,3 +790,47 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Page loaded, initializing WebSocket...');
     initWebSocket();
 });
+
+// Thêm hàm để hiển thị toàn bộ dữ liệu đã thu thập
+function displayFullGraph(chartId) {
+    const chart = charts[chartId];
+    if (!chart) {
+        console.error(`Chart ${chartId} not found`);
+        return;
+    }
+
+    // Kiểm tra xem có dữ liệu log không
+    if (!graphLogData[chartId] || graphLogData[chartId].labels.length === 0) {
+        console.log("No log data available to display full graph");
+        return;
+    }
+
+    // Lấy dữ liệu log đã lưu từ Start đến Stop
+    const logData = graphLogData[chartId];
+    
+    // Cập nhật chế độ hiển thị
+    graphDisplayMode[chartId] = 'full';
+    
+    // Cập nhật đồ thị với tất cả dữ liệu
+    chart.data.labels = [...logData.labels]; // Sử dụng tất cả nhãn thời gian đã ghi
+    
+    // Cập nhật dữ liệu cho từng dataset
+    chart.data.datasets.forEach((dataset, index) => {
+        const valname = dataset.label;
+        if (logData.datasets[valname]) {
+            dataset.data = [...logData.datasets[valname]]; // Sử dụng tất cả dữ liệu đã ghi
+        }
+    });
+    
+    // Cập nhật tùy chọn tỷ lệ để hiển thị đẹp hơn với nhiều dữ liệu
+    chart.options.scales.x = {
+        ticks: {
+            autoSkip: true,
+            maxTicksLimit: 20 // Giới hạn số lượng nhãn hiển thị trên trục x
+        }
+    };
+    
+    // Cập nhật đồ thị
+    chart.update();
+    console.log(`Displayed full graph for ${chartId} with ${logData.labels.length} data points`);
+}
