@@ -45,36 +45,39 @@ function onMessageArrived(message) {
     }
 }
 
+// Cập nhật bảng WatchR1 với dữ liệu mới từ MQTT
+//----------------------------------------------------------------------------------------------
 function updateWatchR1Values(data) {
     const table = document.querySelector('.table1 tbody');
     if (!table) return;
 
-    // Map của giá trị và index trong bảng
-    const valueMap = {
-        'imu': 0,
-        'encoder_x': 1,
-        'encoder_y': 2
-    };
+    // Xóa toàn bộ dữ liệu cũ trong bảng
+    table.innerHTML = '';
 
-    // Cập nhật từng giá trị
+    // Tạo các hàng mới dựa trên dữ liệu JSON
     Object.entries(data).forEach(([key, value]) => {
-        const rowIndex = valueMap[key];
-        if (rowIndex !== undefined) {
-            const row = table.rows[rowIndex];
-            if (row) {
-                const valueCell = row.cells[2];
-                // Format số thập phân nếu cần
-                const formattedValue = typeof value === 'number' ? 
-                    value.toFixed(2) : value;
-                valueCell.textContent = formattedValue;
-                
-                // Thêm hiệu ứng highlight
-                valueCell.classList.add('updated');
-                setTimeout(() => valueCell.classList.remove('updated'), 1000);
-            }
-        }
+        const row = table.insertRow();
+        
+        // Cột valname
+        const cellName = row.insertCell(0);
+        cellName.textContent = key;
+        
+        // Cột address (để trống hoặc giá trị mặc định)
+        const cellAddress = row.insertCell(1);
+        cellAddress.textContent = '--'; // hoặc có thể để trống: ''
+        
+        // Cột value
+        const cellValue = row.insertCell(2);
+        const formattedValue = typeof value === 'number' ? 
+            value.toFixed(2) : value;
+        cellValue.textContent = formattedValue;
+        
+        // Thêm hiệu ứng highlight
+        cellValue.classList.add('updated');
+        setTimeout(() => cellValue.classList.remove('updated'), 1000);
     });
 }
+//----------------------------------------------------------------------------------------------
 
 function updateConnectionStatus(status) {
     let statusDiv = document.querySelector('.mqtt-status');
@@ -162,63 +165,59 @@ function addValueToGraph(graphContainer, valname, address) {
         return;
     }
 
-    // Kiểm tra xem valname có trong bảng WatchR1 không
-    const watchR1Values = getWatchR1Values();
-    console.log("Available values:", watchR1Values);
-    console.log("Trying to add value:", valname);
-    
-    // Kiểm tra nếu valname không có trong bảng, có thể người dùng đã nhập tên chính xác từ bảng
+    // Kiểm tra trong bảng
     const table = document.querySelector('.table1 tbody');
     let foundInTable = false;
+    let exactValname = '';
     
     if (table) {
         Array.from(table.rows).forEach(row => {
             const name = row.cells[0].textContent.trim();
             if (name.toLowerCase() === valname.toLowerCase()) {
-                // Dùng tên chính xác từ bảng
-                valname = name;
+                exactValname = name; // Sử dụng tên chính xác từ bảng
                 foundInTable = true;
-                console.log(`Found matching value in table: ${valname}`);
             }
         });
     }
     
     if (!foundInTable) {
-        alert(`Vui lòng chọn một trong các giá trị từ bảng WatchR1: IMU, Encoder X, Encoder Y`);
+        alert(`Vui lòng chọn một giá trị có trong bảng WatchR1`);
+        return;
+    }
+
+    // Kiểm tra xem giá trị đã được thêm vào biểu đồ chưa
+    if (graphData[chartId] && graphData[chartId][exactValname]) {
+        alert(`Giá trị ${exactValname} đã được thêm vào biểu đồ này`);
         return;
     }
 
     const color = generateRandomColor();
-    
-    // Khởi tạo mảng dữ liệu rỗng
     const initialData = Array(MAX_DATA_POINTS).fill(null);
     
-    // Thêm dataset mới
+    // Thêm dataset mới với tên chính xác từ bảng
     chart.data.datasets.push({
-        label: valname,
+        label: exactValname,
         data: initialData,
         borderColor: color,
         fill: false,
-        pointRadius: 0,  // Remove points
-        pointHoverRadius: 5,  // Show points on hover
-        borderWidth: 2,  // Line thickness
-        tension: 0.4  // Make lines smoother
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+        tension: 0.4
     });
     
-    // Lưu thông tin về dataset
+    // Lưu thông tin dataset
     if (!graphData[chartId]) {
         graphData[chartId] = {};
     }
-    graphData[chartId][valname] = {
+    graphData[chartId][exactValname] = {
         address: address,
         datasetIndex: chart.data.datasets.length - 1
     };
     
     chart.update();
-    console.log(`Added new dataset to chart ${chartId} for ${valname}`);
-    
-    // Thông báo cho người dùng
-    alert(`Đã thêm ${valname} vào biểu đồ. Bấm Start để bắt đầu vẽ biểu đồ.`);
+    console.log(`Added new dataset to chart ${chartId} for ${exactValname}`);
+    alert(`Đã thêm ${exactValname} vào biểu đồ. Bấm Start để bắt đầu vẽ biểu đồ.`);
 }
 
 // Hàm lấy giá trị từ bảng WatchR1
