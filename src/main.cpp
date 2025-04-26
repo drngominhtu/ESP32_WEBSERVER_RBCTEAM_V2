@@ -25,7 +25,7 @@ PubSubClient mqtt_client(espClient);
 
 // Add rate limiting variables
 unsigned long lastMessageTime = 0;
-const unsigned long MESSAGE_INTERVAL = 25; // 100ms between messages
+const unsigned long MESSAGE_INTERVAL = 100; // 100ms between messages
 const size_t MAX_QUEUE_SIZE = 32; // Maximum queue size for WebSocket messages
 
 // Update MQTT callback
