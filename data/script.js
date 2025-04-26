@@ -740,7 +740,8 @@ function onMessage(event) {
     try {
         const data = JSON.parse(event.data);
         console.log('Parsed data:', data);
-        // Handle the data immediately
+        
+        // Cập nhật bảng với toàn bộ dữ liệu JSON
         updateWatchR1Table(data);
     } catch (error) {
         console.error('Error parsing message:', error);
@@ -755,34 +756,36 @@ function updateWatchR1Table(data) {
         return;
     }
 
-    const topicParts = data.topic.split('/');
-    const topicType = topicParts[topicParts.length - 1];
-
-    // Map topic to row index
-    const topicMap = {
-        'imu': 0,
-        'encoder_x': 1,
-        'encoder_y': 2
+    // Map các giá trị với vị trí hàng trong bảng
+    const valueMap = {
+        'imu': { index: 0, format: true },
+        'encoder_x': { index: 1, format: true },
+        'encoder_y': { index: 2, format: true }
     };
 
-    const rowIndex = topicMap[topicType];
-    if (rowIndex !== undefined) {
-        const row = table.rows[rowIndex];
-        if (row) {
-            const valueCell = row.cells[2];
-            // Format số thành 2 chữ số sau dấu thập phân
-            const value = typeof data.value === 'number' ? 
-                         data.value.toFixed(2) : 
-                         data.value;
-            valueCell.textContent = value;
-            
-            // Add highlight effect
-            valueCell.classList.add('updated');
-            setTimeout(() => valueCell.classList.remove('updated'), 1000);
-            
-            console.log(`Updated ${topicType} with value ${value}`);
+    // Cập nhật từng giá trị trong bảng
+    Object.entries(valueMap).forEach(([key, config]) => {
+        if (data[key] !== undefined) {
+            const row = table.rows[config.index];
+            if (row) {
+                const valueCell = row.cells[2];
+                let value = data[key];
+                
+                // Format số thành 2 chữ số thập phân nếu cần
+                if (config.format && typeof value === 'number') {
+                    value = value.toFixed(2);
+                }
+                
+                valueCell.textContent = value;
+                
+                // Thêm hiệu ứng highlight
+                valueCell.classList.add('updated');
+                setTimeout(() => valueCell.classList.remove('updated'), 1000);
+                
+                console.log(`Updated ${key} with value ${value}`);
+            }
         }
-    }
+    });
 }
 
 // Initialize when page loads

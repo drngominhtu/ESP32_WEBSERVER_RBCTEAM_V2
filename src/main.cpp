@@ -25,8 +25,8 @@ PubSubClient mqtt_client(espClient);
 
 // Add rate limiting variables
 unsigned long lastMessageTime = 0;
-const unsigned long MESSAGE_INTERVAL = 250; // 100ms between messages
-const size_t MAX_QUEUE_SIZE = 16; // Maximum queue size for WebSocket messages
+const unsigned long MESSAGE_INTERVAL = 25; // 100ms between messages
+const size_t MAX_QUEUE_SIZE = 32; // Maximum queue size for WebSocket messages
 
 // Update MQTT callback
 void mqtt_callback(char* topic, byte* payload, unsigned int length) {
@@ -37,36 +37,22 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     }
     lastMessageTime = currentTime;
 
-    // Parse incoming JSON
-    StaticJsonDocument<200> incomingDoc;
-    deserializeJson(incomingDoc, payload, length);
-
-    // Create separate messages for each value
-    StaticJsonDocument<200> imuDoc;
-    imuDoc["topic"] = "Swerve_Robot/data/imu";
-    imuDoc["value"] = incomingDoc["imu"].as<float>();
+    // Create JSON document
+    StaticJsonDocument<200> doc;
     
-    StaticJsonDocument<200> encoderXDoc;
-    encoderXDoc["topic"] = "Swerve_Robot/data/encoder_x";
-    encoderXDoc["value"] = incomingDoc["encoder_x"].as<float>();
+    // Parse incoming payload into JSON
+    DeserializationError error = deserializeJson(doc, payload, length);
     
-    StaticJsonDocument<200> encoderYDoc;
-    encoderYDoc["topic"] = "Swerve_Robot/data/encoder_y";
-    encoderYDoc["value"] = incomingDoc["encoder_y"].as<float>();
+    if (error) {
+        Serial.print("JSON parsing failed: ");
+        Serial.println(error.c_str());
+        return;
+    }
 
-    // Send each value via WebSocket
+    // Forward the complete JSON message to WebSocket clients
     if (ws.count() > 0) {
         String jsonString;
-        
-        serializeJson(imuDoc, jsonString);
-        ws.textAll(jsonString);
-        
-        jsonString = "";
-        serializeJson(encoderXDoc, jsonString);
-        ws.textAll(jsonString);
-        
-        jsonString = "";
-        serializeJson(encoderYDoc, jsonString);
+        serializeJson(doc, jsonString);
         ws.textAll(jsonString);
     }
 }
