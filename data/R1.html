@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Thông tin meta và liên kết CSS -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>R1 Page</title>
@@ -13,6 +12,7 @@
         <!-- Header -->
         <header>
             <div class="logo">
+                <img src="aml_logo.svg" alt="Logo">
             </div>
             <div class="headpara">
             </div>
@@ -63,51 +63,35 @@
                             </div>
                         </div>
                     </div>
-                    <!-- New subgraphs will be appended here -->
                 </div>
+                
+                <div class="addgraphbutton">
+                    <button>ADD NEW GRAPH</button>
+                </div>
+            </div>
 
-                <!-- Bảng điều khiển -->
-                <div class="subgraph2">
-                    <div class="table">
-                        <div class="table1">
-                            <h3 class="table-title">WatchR1</h3>
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Variable</th>
-                                        <th>Address</th>
-                                        <th>Value</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>IMU</td>
-                                        <td>Swerve_Robot/data/imu</td>
-                                        <td>--</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Encoder X</td>
-                                        <td>Swerve_Robot/data/encoder_x</td>
-                                        <td>--</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="addgraphbutton">
-                        <button>ADD NEW GRAPH</button>
+            <!-- Bảng điều khiển -->
+            <div class="subgraph2">
+                <div class="table">
+                    <div class="table1">
+                        <h3 class="table-title">WatchR1</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Variable</th>
+                                    <th>Address</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Bảng sẽ được cập nhật động từ JavaScript -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
     </main>
-
-    <!-- Footer -->
-    <footer>
-        <p>&copy; Designed by Dr.ngominhtu - AML_RBCTEAM25</p>
-    </footer>
-
-    <!-- Liên kết file JavaScript -->
     <script src="script.js"></script>
 </body>
 </html>
