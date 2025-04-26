@@ -22,9 +22,34 @@ header {
 
 /* Style cho đoạn văn trong header */
 .headpara {
-    flex: 1;
+    padding: 10px;
     margin-left: 20px;
-    color: #fff;
+}
+
+.wifi-info {
+    display: flex;
+    gap: 20px;
+    color: #ffffff;
+}
+
+.info-label {
+    font-weight: bold;
+    color: #ffffff;
+}
+
+.status {
+    padding: 3px 8px;
+    border-radius: 4px;
+}
+
+.status.connected {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.status.disconnected {
+    background-color: #f44336;
+    color: white;
 }
 
 /* Style cho phần dưới (bottom section) */
@@ -87,7 +112,7 @@ header {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     display: flex;
     flex-direction: row; /* Arrange child elements horizontally */
-    gap: 20px; /* Add spacing between subgraphs */
+    gap: 4px; /* Add spacing between subgraphs */
     padding: 20px;
     min-height: 600px; /* Double the minimum height */
     overflow-y: auto; /* Enable vertical scrolling */
@@ -520,12 +545,12 @@ canvas {
 
 .addgraphbutton {
     text-align: center;
-    margin: 20px 0;
+    margin: 0px 0;
 }
 
 .addgraphbutton button {
-    padding: 10px 20px;
-    font-size: 16px;
+    padding: 10px 4px;
+    font-size: 10px;
     background-color: #4CAF50;
     color: white;
     border: none;
