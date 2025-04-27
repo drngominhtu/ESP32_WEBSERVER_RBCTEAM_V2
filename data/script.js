@@ -843,7 +843,7 @@ function updateWatchR1Table(data) {
         if (!row) {
             row = table.insertRow(index);
             row.insertCell(0).textContent = key;  // Tên biến
-            row.insertCell(1).textContent = '--'; // Address (có thể để trống hoặc giá trị mặc định)
+            row.insertCell(1).textContent = ''; // Address (có thể để trống hoặc giá trị mặc định)
             row.insertCell(2);                    // Ô giá trị
         }
 
