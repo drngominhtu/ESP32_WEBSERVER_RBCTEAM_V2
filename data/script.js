@@ -49,33 +49,60 @@ function onMessageArrived(message) {
 //----------------------------------------------------------------------------------------------
 function updateWatchR1Values(data) {
     const table = document.querySelector('.table1 tbody');
-    if (!table) return;
+    if (!table) {
+        console.error('Table not found');
+        return;
+    }
 
-    // Xóa toàn bộ dữ liệu cũ trong bảng
-    table.innerHTML = '';
+    try {
+        // Convert existing table rows to a map for quick lookup
+        const existingRows = new Map();
+        Array.from(table.rows).forEach(row => {
+            const key = row.cells[0].textContent.trim();
+            existingRows.set(key, row);
+        });
 
-    // Tạo các hàng mới dựa trên dữ liệu JSON
-    Object.entries(data).forEach(([key, value]) => {
-        const row = table.insertRow();
-        
-        // Cột valname
-        const cellName = row.insertCell(0);
-        cellName.textContent = key;
-        
-        // Cột address (để trống hoặc giá trị mặc định)
-        const cellAddress = row.insertCell(1);
-        cellAddress.textContent = '--'; // hoặc có thể để trống: ''
-        
-        // Cột value
-        const cellValue = row.insertCell(2);
-        const formattedValue = typeof value === 'number' ? 
-            value.toFixed(2) : value;
-        cellValue.textContent = formattedValue;
-        
-        // Thêm hiệu ứng highlight
-        cellValue.classList.add('updated');
-        setTimeout(() => cellValue.classList.remove('updated'), 1000);
-    });
+        // Process each item from JSON data
+        Object.entries(data).forEach(([key, value]) => {
+            let row;
+            
+            // Check if row already exists
+            if (existingRows.has(key)) {
+                // Use existing row
+                row = existingRows.get(key);
+                existingRows.delete(key); // Remove from map to track unused rows
+            } else {
+                // Create new row if it doesn't exist
+                row = table.insertRow();
+                const cellName = row.insertCell(0);
+                const cellAddress = row.insertCell(1);
+                const cellValue = row.insertCell(2);
+                
+                cellName.textContent = key;
+                cellAddress.textContent = '--';
+            }
+
+            // Update value cell
+            const cellValue = row.cells[2];
+            const formattedValue = typeof value === 'number' ? 
+                value.toFixed(2) : value;
+
+            // Only update and animate if value has changed
+            if (cellValue.textContent !== String(formattedValue)) {
+                cellValue.textContent = formattedValue;
+                cellValue.classList.remove('updated');
+                void cellValue.offsetWidth; // Force reflow for animation
+                cellValue.classList.add('updated');
+            }
+        });
+
+        // Keep existing rows that weren't in the new data
+        // They might be updated in future messages
+        console.log(`Table updated with ${Object.keys(data).length} values`);
+
+    } catch (error) {
+        console.error('Error updating table:', error);
+    }
 }
 //----------------------------------------------------------------------------------------------
 
@@ -737,48 +764,63 @@ function onClose(event) {
 // Thay thế hàm onMessage hiện tại
 function onMessage(event) {
     console.log('Raw message received:', event.data);
-    let data;
-    
-    //==========================================================================================
     
     try {
-        // Lấy toàn bộ bản tin JSON một lần
-        data = JSON.parse(event.data);
-        console.log('Complete JSON message:', data);
+        // Parse JSON data
+        const data = JSON.parse(event.data);
+        console.log('Parsed JSON data:', data);
         
-        // Cập nhật bảng với bản tin JSON hoàn chỉnh
         const table = document.querySelector('.table1 tbody');
         if (!table) {
             console.error('Table not found!');
             return;
         }
 
-        // Map các giá trị với vị trí hàng trong bảng
-        const valueMap = {
-            'imu': { index: 0, format: true },
-            'encoder_x': { index: 1, format: true },
-            'encoder_y': { index: 2, format: true }
-        };
+        // Convert existing table rows to a map for quick lookup
+        const existingRows = new Map();
+        Array.from(table.rows).forEach(row => {
+            const key = row.cells[0].textContent.trim();
+            existingRows.set(key, row);
+        });
 
-        // Cập nhật từng giá trị trong bảng từ bản tin JSON hoàn chỉnh
-        Object.entries(valueMap).forEach(([key, config]) => {
-            if (data[key] !== undefined) {
-                const row = table.rows[config.index];
-                if (row) {
-                    const valueCell = row.cells[2];
-                    let value = data[key];
-                    
-                    // Format số thành 2 chữ số thập phân nếu cần
-                    if (config.format && typeof value === 'number') {
-                        value = value.toFixed(2);
-                    }
-                    
-                    valueCell.textContent = value;
-                    valueCell.classList.add('updated');
-                    setTimeout(() => valueCell.classList.remove('updated'), 1000);
-                }
+        // Process each item from JSON data
+        Object.entries(data).forEach(([key, value]) => {
+            let row;
+            
+            // Check if row exists for this key
+            if (existingRows.has(key)) {
+                // Use existing row
+                row = existingRows.get(key);
+                existingRows.delete(key); // Remove from map to track unused rows
+            } else {
+                // Create new row if it doesn't exist
+                row = table.insertRow();
+                const cellName = row.insertCell(0);
+                const cellAddress = row.insertCell(1);
+                const cellValue = row.insertCell(2);
+                
+                cellName.textContent = key;
+                cellAddress.textContent = '--';
+                console.log(`Created new row for ${key}`);
+            }
+
+            // Update value cell with formatting
+            const cellValue = row.cells[2];
+            const formattedValue = typeof value === 'number' ? 
+                value.toFixed(2) : value;
+
+            // Update and animate only if value changed
+            if (cellValue.textContent !== String(formattedValue)) {
+                cellValue.textContent = formattedValue;
+                cellValue.classList.remove('updated');
+                void cellValue.offsetWidth; // Force reflow
+                cellValue.classList.add('updated');
+                console.log(`Updated ${key} with value ${formattedValue}`);
             }
         });
+
+        // Log update summary
+        console.log(`Table updated with ${Object.keys(data).length} values`);
 
     } catch (error) {
         console.error('Error processing message:', error);
