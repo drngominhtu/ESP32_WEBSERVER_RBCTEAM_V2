@@ -678,7 +678,7 @@ function createChart(canvasId) {
     
     return chart;
 }
-
+//====================================================================================================================
 // Hàm tải dữ liệu từ file JSON và điền vào bảng WatchR1
 function loadDataFromJSON() {
     fetch('test.json')
@@ -865,6 +865,7 @@ function updateWatchR1Table(data) {
         console.log(`Updated ${key} with value ${formattedValue}`);
     });
 }
+//====================================================================================================================
 
 //===========================================================================================
 // Hàm khởi tạo WebSocket và xử lý sự kiện khi trang tải xong
