@@ -800,7 +800,7 @@ function onMessage(event) {
                 const cellValue = row.insertCell(2);
                 
                 cellName.textContent = key;
-                cellAddress.textContent = '--';
+                cellAddress.textContent = '';
                 console.log(`Created new row for ${key}`);
             }
 
