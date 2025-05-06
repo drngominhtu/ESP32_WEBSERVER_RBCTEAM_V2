@@ -1,47 +1,64 @@
-// MQTT Configuration
-const MQTT_CONFIG = {
-    broker: '192.168.5.1',
-    port: 1883,
-    clientId: 'webClient_' + Math.random().toString(16).substr(2, 8),
-    topic: 'Swerve_Robot/data'
+// Replace MQTT Configuration with WebSocket Configuration
+const WS_CONFIG = {
+    host: '192.168.5.1',
+    port: 9001,
+    protocol: 'ws',
+    username: 'rbcteam',
+    password: 'rbcteam',
+    clientId: 'webClient_' + Math.random().toString(16).substr(2, 8)
 };
 
 // Khai báo charts một lần duy nhất
 const charts = {};
 let mqttClient = null;
 
-// Khởi tạo kết nối MQTT
-function connectMQTT() {
-    console.log('Connecting to MQTT broker...');
-    mqttClient = new Paho.MQTT.Client(
-        MQTT_CONFIG.broker,
-        MQTT_CONFIG.port,
-        MQTT_CONFIG.clientId
-    );
-
-    mqttClient.onConnectionLost = onConnectionLost;
-    mqttClient.onMessageArrived = onMessageArrived;
-
-    mqttClient.connect({
-        onSuccess: onConnect,
-        onFailure: onFailure,
-        keepAliveInterval: 60
-    });
-}
-
-function onConnect() {
-    console.log('Connected to MQTT broker');
-    mqttClient.subscribe(MQTT_CONFIG.topic);
-    updateConnectionStatus('Connected');
-}
-
-function onMessageArrived(message) {
+// Initialize WebSocket connection
+function initWebSocket() {
+    console.log('Initializing WebSocket connection...');
+    const wsUrl = `${WS_CONFIG.protocol}://${WS_CONFIG.host}:${WS_CONFIG.port}/ws`;
+    
     try {
-        const data = JSON.parse(message.payloadString);
-        console.log('Received data:', data);
-        updateWatchR1Values(data);
+        websocket = new WebSocket(wsUrl);
+
+        websocket.onopen = () => {
+            console.log('WebSocket Connected!');
+            // Send authentication after connection
+            const authData = {
+                type: 'auth',
+                username: WS_CONFIG.username,
+                password: WS_CONFIG.password,
+                clientId: WS_CONFIG.clientId
+            };
+            websocket.send(JSON.stringify(authData));
+            updateConnectionStatus('Connected');
+        };
+
+        websocket.onclose = () => {
+            console.log('WebSocket Disconnected!');
+            updateConnectionStatus('Disconnected');
+            setTimeout(initWebSocket, 2000); // Retry connection after 2 seconds
+        };
+
+        websocket.onerror = (error) => {
+            console.error('WebSocket Error:', error);
+            updateConnectionStatus('Connection Failed');
+        };
+
+        websocket.onmessage = (event) => {
+            console.log('Raw message received:', event.data);
+            try {
+                const data = JSON.parse(event.data);
+                console.log('Parsed data:', data);
+                updateWatchR1Values(data);
+            } catch (error) {
+                console.error('Error processing message:', error);
+            }
+        };
+
     } catch (error) {
-        console.error('Error parsing message:', error);
+        console.error('Error creating WebSocket:', error);
+        updateConnectionStatus('Connection Failed');
+        setTimeout(initWebSocket, 2000);
     }
 }
 
@@ -107,15 +124,15 @@ function updateWatchR1Values(data) {
 //----------------------------------------------------------------------------------------------
 
 function updateConnectionStatus(status) {
-    let statusDiv = document.querySelector('.mqtt-status');
+    let statusDiv = document.querySelector('.ws-status');
     if (!statusDiv) {
         statusDiv = document.createElement('div');
-        statusDiv.className = 'mqtt-status';
+        statusDiv.className = 'ws-status';
         document.querySelector('.headpara').appendChild(statusDiv);
     }
     
-    statusDiv.textContent = `MQTT: ${status}`;
-    statusDiv.className = `mqtt-status ${status.toLowerCase()}`;
+    statusDiv.textContent = `WebSocket: ${status}`;
+    statusDiv.className = `ws-status ${status.toLowerCase()}`;
 }
 
 function onConnectionLost(responseObject) {
@@ -728,8 +745,8 @@ function initialize() {
         console.log('First chart initialized');
     }
     
-    // Connect to MQTT
-    connectMQTT();
+    // Connect to WebSocket instead of MQTT
+    initWebSocket();
 }
 
 // Make sure we have the charts object defined
@@ -743,23 +760,6 @@ document.addEventListener('DOMContentLoaded', initialize);
 
 
 let websocket;
-
-function initWebSocket() {
-    console.log('Initializing WebSocket connection...');
-    websocket = new WebSocket(`ws://${window.location.hostname}/ws`);
-    websocket.onopen = onOpen;
-    websocket.onclose = onClose;
-    websocket.onmessage = onMessage;
-}
-
-function onOpen(event) {
-    console.log('WebSocket Connected!');
-}
-
-function onClose(event) {
-    console.log('WebSocket Disconnected!');
-    setTimeout(initWebSocket, 2000);
-}
 
 // Thay thế hàm onMessage hiện tại
 function onMessage(event) {
@@ -919,3 +919,24 @@ function displayFullGraph(chartId) {
     chart.update();
     console.log(`Displayed full graph for ${chartId} with ${logData.labels.length} data points`);
 }
+
+// Update the CSS for connection status
+const wsStyle = document.createElement('style');
+wsStyle.textContent = `
+    .ws-status {
+        padding: 8px 16px;
+        border-radius: 4px;
+        margin: 10px;
+        font-weight: bold;
+    }
+    .ws-status.connected {
+        background-color: #4CAF50;
+        color: white;
+    }
+    .ws-status.disconnected,
+    .ws-status.failed {
+        background-color: #f44336;
+        color: white;
+    }
+`;
+document.head.appendChild(wsStyle);

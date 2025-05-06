@@ -18,7 +18,8 @@ const char* mqtt_password = "aml305b4";
 const char* mqtt_topic = "Swerve_Robot/data/#";
 
 // Create objects
-AsyncWebServer server(80);
+AsyncWebServer server(80);  // HTTP server
+AsyncWebServer wsServer(9001);  // WebSocket server
 AsyncWebSocket ws("/ws");
 WiFiClient espClient;
 PubSubClient mqtt_client(espClient);
@@ -60,15 +61,53 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
 void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {
     switch (type) {
         case WS_EVT_CONNECT:
+            Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
             break;
+            
         case WS_EVT_DISCONNECT:
+            Serial.printf("WebSocket client #%u disconnected\n", client->id());
             break;
+            
         case WS_EVT_DATA:
             if (len > 0) {
+                // Rate limiting check
+                unsigned long currentTime = millis();
+                if (currentTime - lastMessageTime < MESSAGE_INTERVAL) {
+                    return;
+                }
+                lastMessageTime = currentTime;
+
+                // Handle incoming data
+                StaticJsonDocument<512> doc; // Increased buffer size
                 char message[len + 1];
                 memcpy(message, data, len);
                 message[len] = '\0';
-                mqtt_client.publish("Swerve_Robot/command", message);
+                
+                DeserializationError error = deserializeJson(doc, message);
+                if (!error) {
+                    // Check for authentication message
+                    if (doc.containsKey("type") && strcmp(doc["type"], "auth") == 0) {
+                        const char* username = doc["username"];
+                        const char* password = doc["password"];
+                        if (strcmp(username, "rbcteam") == 0 && strcmp(password, "rbcteam") == 0) {
+                            Serial.printf("Client #%u authenticated successfully\n", client->id());
+                            // Send confirmation
+                            client->text("{\"status\":\"authenticated\"}");
+                        } else {
+                            client->text("{\"error\":\"authentication_failed\"}");
+                            client->close();
+                            return;
+                        }
+                    } else {
+                        // Forward to all authenticated clients
+                        String jsonString;
+                        serializeJson(doc, jsonString);
+                        ws.textAll(jsonString);
+                    }
+                } else {
+                    Serial.println("JSON parsing failed");
+                    client->text("{\"error\":\"invalid_json\"}");
+                }
             }
             break;
     }
@@ -103,7 +142,12 @@ void setup() {
     ws.onEvent(onWsEvent);
     server.addHandler(&ws);
 
-    // Setup web routes with correct MIME types
+    // Setup WebSocket server
+    wsServer.addHandler(&ws);
+    wsServer.begin();
+    Serial.println("WebSocket server started on port 9001");
+
+    // Setup web server routes
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
         request->send(SPIFFS, "/index.html", "text/html");
     });
@@ -117,7 +161,7 @@ void setup() {
     });
 
     server.begin();
-    Serial.println("HTTP server started");
+    Serial.println("HTTP server started on port 80");
 }
 
 void reconnect_mqtt() {
@@ -140,4 +184,7 @@ void loop() {
         reconnect_mqtt();
     }
     mqtt_client.loop();
+    
+    // Clean up disconnected WebSocket clients
+    ws.cleanupClients();
 }
