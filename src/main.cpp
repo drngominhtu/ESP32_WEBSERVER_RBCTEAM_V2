@@ -15,7 +15,7 @@ const char* mqtt_server = "192.168.5.1";
 const int mqtt_port = 1883;
 const char* mqtt_username = "AML_Robocon";
 const char* mqtt_password = "aml305b4";
-const char* mqtt_topic = "Swerve_Robot/data/#";
+const char* mqtt_topic = "Swerve_Robot/data/#"; //sửa thành topic = #
 
 // Create objects
 AsyncWebServer server(80);

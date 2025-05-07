@@ -6,7 +6,7 @@ const MQTT_CONFIG = {
     topic: 'Swerve_Robot/data'
 };
 
-// Khai báo charts một lần duy nhất
+// Khai báo charts 
 const charts = {};
 let mqttClient = null;
 
