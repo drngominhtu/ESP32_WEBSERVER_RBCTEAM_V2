@@ -368,9 +368,13 @@ canvas {
 
 /* Style cho input fields */
 .addvalgraph {
-    flex: 1;
     display: flex;
-    gap: 15px;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.input-field {
+    width: 100%;
 }
 
 .input-field {
@@ -528,6 +532,13 @@ canvas {
 .table1 th, .table2 th,
 .table1 td, .table2 td {
     width: 33.33%; /* Đặt chiều rộng cho mỗi cột bằng nhau */
+}
+
+/* Điều chỉnh độ rộng cột cho bảng 2 cột */
+.table1 th, .table1 td {
+    width: 50%; /* Chia đều 2 cột */
+    padding: 8px;
+    text-align: left;
 }
 
 /* Thêm padding cho các ô trong bảng */

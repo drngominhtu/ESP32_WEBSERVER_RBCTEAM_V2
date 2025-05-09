@@ -15,7 +15,7 @@ const char* mqtt_server = "192.168.5.1";
 const int mqtt_port = 1883;
 const char* mqtt_username = "AML_Robocon";
 const char* mqtt_password = "aml305b4";
-const char* mqtt_topic = "Swerve_Robot/data/#"; //sửa thành topic = #
+const char* mqtt_topic = "#"; //sửa thành topic = #
 
 // Create objects
 AsyncWebServer server(80);
@@ -37,10 +37,8 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     }
     lastMessageTime = currentTime;
 
-    // Create JSON document
+    // Tạo JSON chỉ với name và value
     StaticJsonDocument<200> doc;
-    
-    // Parse incoming payload into JSON
     DeserializationError error = deserializeJson(doc, payload, length);
     
     if (error) {
@@ -49,7 +47,7 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
         return;
     }
 
-    // Forward the complete JSON message to WebSocket clients
+    // Forward JSON message không có address
     if (ws.count() > 0) {
         String jsonString;
         serializeJson(doc, jsonString);
@@ -65,6 +63,7 @@ void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventTyp
             break;
         case WS_EVT_DATA:
             if (len > 0) {
+                // Chỉ gửi tên và giá trị
                 char message[len + 1];
                 memcpy(message, data, len);
                 message[len] = '\0';

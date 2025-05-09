@@ -3,7 +3,7 @@ const MQTT_CONFIG = {
     broker: '192.168.5.1',
     port: 1883,
     clientId: 'webClient_' + Math.random().toString(16).substr(2, 8),
-    topic: 'Swerve_Robot/data'
+    topic: '#'
 };
 
 // Khai báo charts 
@@ -75,15 +75,13 @@ function updateWatchR1Values(data) {
                 // Create new row if it doesn't exist
                 row = table.insertRow();
                 const cellName = row.insertCell(0);
-                const cellAddress = row.insertCell(1);
-                const cellValue = row.insertCell(2);
+                const cellValue = row.insertCell(1); // Chỉ còn 2 cột: Name và Value
                 
                 cellName.textContent = key;
-                cellAddress.textContent = '--';
             }
 
             // Update value cell
-            const cellValue = row.cells[2];
+            const cellValue = row.cells[1];
             const formattedValue = typeof value === 'number' ? 
                 value.toFixed(2) : value;
 
@@ -183,7 +181,7 @@ let graphLogData = {}; // Lưu dữ liệu log cho mỗi biểu đồ
 let graphDisplayMode = {}; // 'live' hoặc 'full'
 
 // Sửa hàm addValueToGraph
-function addValueToGraph(graphContainer, valname, address) {
+function addValueToGraph(graphContainer, valname) {
     const chartId = graphContainer.querySelector('canvas').id;
     const chart = charts[chartId];
 
@@ -238,7 +236,6 @@ function addValueToGraph(graphContainer, valname, address) {
         graphData[chartId] = {};
     }
     graphData[chartId][exactValname] = {
-        address: address,
         datasetIndex: chart.data.datasets.length - 1
     };
     
@@ -353,14 +350,14 @@ function setupDefaultGraph(graphId, containerSelector) {
     // Thêm sự kiện cho nút OK
     okButton.addEventListener('click', () => {
         const valnameInput = graphContainer.querySelector('#valname');
-        const addressInput = graphContainer.querySelector('#address');
+        //const addressInput = graphContainer.querySelector('#address');
         const valname = valnameInput.value.trim();
-        const address = addressInput.value.trim();
+        //const address = addressInput.value.trim();
 
-        if (valname && address) {
-            addValueToGraph(graphContainer.querySelector('.graph-container'), valname, address);
+        if (valname /* && address */) {
+            addValueToGraph(graphContainer.querySelector('.graph-container'), valname/*, address */);
             valnameInput.value = '';
-            addressInput.value = '';
+            //addressInput.value = '';
         } else {
             alert('Vui lòng nhập cả tên giá trị và địa chỉ.');
         }
@@ -395,10 +392,6 @@ function addNewSubgraph() {
                     <div class="input-field">
                         <label for="valname_${graphCount}">#Valname</label>
                         <input type="text" id="valname_${graphCount}" placeholder="Enter value name">
-                    </div>
-                    <div class="input-field">
-                        <label for="address_${graphCount}">#Address</label>
-                        <input type="text" id="address_${graphCount}" placeholder="Enter address">
                     </div>
                 </div>
                 <div class="okbutton">
@@ -519,16 +512,13 @@ function setupGraphEventListeners(graphDiv, graphId) {
     if (okButton) {
         okButton.addEventListener('click', () => {
             const valnameInput = graphDiv.querySelector(`input[id^="valname"]`);
-            const addressInput = graphDiv.querySelector(`input[id^="address"]`);
             const valname = valnameInput?.value.trim();
-            const address = addressInput?.value.trim();
 
-            if (valname && address) {
-                addValueToGraph(graphDiv.querySelector('.graph-container'), valname, address);
+            if (valname) {
+                addValueToGraph(graphDiv.querySelector('.graph-container'), valname);
                 valnameInput.value = '';
-                addressInput.value = '';
             } else {
-                alert('Vui lòng nhập cả tên giá trị và địa chỉ.');
+                alert('Vui lòng nhập tên giá trị.');
             }
         });
     }
@@ -763,19 +753,10 @@ function onClose(event) {
 
 // Thay thế hàm onMessage hiện tại
 function onMessage(event) {
-    console.log('Raw message received:', event.data);
-    
     try {
-        // Parse JSON data
         const data = JSON.parse(event.data);
-        console.log('Parsed JSON data:', data);
-        
         const table = document.querySelector('.table1 tbody');
-        if (!table) {
-            console.error('Table not found!');
-            return;
-        }
-
+        
         // Convert existing table rows to a map for quick lookup
         const existingRows = new Map();
         Array.from(table.rows).forEach(row => {
@@ -796,16 +777,13 @@ function onMessage(event) {
                 // Create new row if it doesn't exist
                 row = table.insertRow();
                 const cellName = row.insertCell(0);
-                const cellAddress = row.insertCell(1);
-                const cellValue = row.insertCell(2);
+                const cellValue = row.insertCell(1); // Chỉ còn 2 cột
                 
                 cellName.textContent = key;
-                cellAddress.textContent = '';
-                console.log(`Created new row for ${key}`);
             }
 
             // Update value cell with formatting
-            const cellValue = row.cells[2];
+            const cellValue = row.cells[1];
             const formattedValue = typeof value === 'number' ? 
                 value.toFixed(2) : value;
 
