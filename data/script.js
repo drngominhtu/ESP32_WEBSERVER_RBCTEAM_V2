@@ -193,13 +193,11 @@ function addValueToGraph(graphContainer, valname) {
     // Kiểm tra trong bảng
     const table = document.querySelector('.table1 tbody');
     let foundInTable = false;
-    let exactValname = '';
     
     if (table) {
         Array.from(table.rows).forEach(row => {
             const name = row.cells[0].textContent.trim();
             if (name.toLowerCase() === valname.toLowerCase()) {
-                exactValname = name; // Sử dụng tên chính xác từ bảng
                 foundInTable = true;
             }
         });
@@ -211,8 +209,8 @@ function addValueToGraph(graphContainer, valname) {
     }
 
     // Kiểm tra xem giá trị đã được thêm vào biểu đồ chưa
-    if (graphData[chartId] && graphData[chartId][exactValname]) {
-        alert(`Giá trị ${exactValname} đã được thêm vào biểu đồ này`);
+    if (graphData[chartId] && graphData[chartId][valname]) {
+        alert(`Giá trị ${valname} đã được thêm vào biểu đồ này`);
         return;
     }
 
@@ -221,7 +219,7 @@ function addValueToGraph(graphContainer, valname) {
     
     // Thêm dataset mới với tên chính xác từ bảng
     chart.data.datasets.push({
-        label: exactValname,
+        label: valname,
         data: initialData,
         borderColor: color,
         fill: false,
@@ -235,13 +233,13 @@ function addValueToGraph(graphContainer, valname) {
     if (!graphData[chartId]) {
         graphData[chartId] = {};
     }
-    graphData[chartId][exactValname] = {
+    graphData[chartId][valname] = {
         datasetIndex: chart.data.datasets.length - 1
     };
     
     chart.update();
-    console.log(`Added new dataset to chart ${chartId} for ${exactValname}`);
-    alert(`Đã thêm ${exactValname} vào biểu đồ. Bấm Start để bắt đầu vẽ biểu đồ.`);
+    console.log(`Added new dataset to chart ${chartId} for ${valname}`);
+    alert(`Đã thêm ${valname} vào biểu đồ. Bấm Start để bắt đầu vẽ biểu đồ.`);
 }
 
 // Hàm lấy giá trị từ bảng WatchR1
@@ -702,13 +700,12 @@ function initialize() {
     
     // Set up add graph button
     const addButton = document.querySelector('.addgraphbutton button');
-    if (!addButton) {
+    if (addButton) {
+        addButton.addEventListener('click', addNewSubgraph);
+        console.log('Add graph button initialized');
+    } else {
         console.error('Add graph button not found!');
-        return;
     }
-    
-    addButton.addEventListener('click', addNewSubgraph);
-    console.log('Add graph button initialized');
     
     // Initialize first graph
     const firstChart = document.getElementById('myLineChart_1');
@@ -716,10 +713,13 @@ function initialize() {
         charts['myLineChart_1'] = createChart('myLineChart_1');
         setupGraphEventListeners(document.querySelector('.subgraph1_1'), 'myLineChart_1');
         console.log('First chart initialized');
+    } else {
+        console.error('First chart element not found!');
     }
-    
-    // Connect to MQTT
-    connectMQTT();
+
+    // Thiết lập sự kiện cho phần chọn topic
+    setupTopicSelection();
+    console.log('Topic selection initialized');
 }
 
 // Make sure we have the charts object defined
@@ -727,10 +727,28 @@ if (typeof charts === 'undefined') {
     const charts = {};
 }
 
-// Gọi hàm initialize khi trang đã load xong
-document.addEventListener('DOMContentLoaded', initialize);
-
-
+// Cập nhật phần khởi tạo
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('Page loaded, initializing application...');
+    
+    // Hiển thị cấu trúc DOM để debug
+    console.log('Topic select element:', document.getElementById('topic'));
+    console.log('Connect button:', document.getElementById('connect-button'));
+    console.log('Disconnect button:', document.getElementById('disconnect-button'));
+    
+    // Khởi tạo ứng dụng
+    initialize();
+    initWebSocket();
+    
+    // Kiểm tra kết nối WebSocket sau một khoảng thời gian ngắn
+    setTimeout(() => {
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            console.log('WebSocket connection confirmed active');
+        } else {
+            console.error('WebSocket not connected or not initialized properly');
+        }
+    }, 2000);
+});
 
 let websocket;
 
@@ -751,11 +769,46 @@ function onClose(event) {
     setTimeout(initWebSocket, 2000);
 }
 
-// Thay thế hàm onMessage hiện tại
+// Thêm sau khai báo WebSocket
+let knownTopics = []; // Lưu trữ các topic MQTT đã biết
+let currentSubscribedTopic = null; // Topic hiện tại đang được subscribe
+
+// Cải thiện hàm onMessage
 function onMessage(event) {
     try {
+        console.log('WebSocket message received:', event.data);
         const data = JSON.parse(event.data);
+        
+        // Kiểm tra loại tin nhắn topic_list
+        if (data && data.type === 'topic_list') {
+            console.log('Received topic list:', data);
+            
+            // Kiểm tra xem topics có phải là mảng và có dữ liệu không
+            if (Array.isArray(data.topics)) {
+                console.log(`Found ${data.topics.length} topics in received data`);
+                knownTopics = data.topics;
+                populateTopicDropdown();
+            } else {
+                console.error('Topics data is not an array or is missing', data);
+            }
+            return;
+        }
+        
+        if (data.type === 'subscribe_response') {
+            // Thông báo kết quả đăng ký topic
+            console.log(`Subscribed to topic: ${data.topic}`);
+            currentSubscribedTopic = data.topic;
+            updateConnectionStatus(`Connected to: ${data.topic}`);
+            return;
+        }
+        
+        // Xử lý dữ liệu bình thường
+        console.log('Processing data message:', data);
         const table = document.querySelector('.table1 tbody');
+        if (!table) {
+            console.error('Table not found');
+            return;
+        }
         
         // Convert existing table rows to a map for quick lookup
         const existingRows = new Map();
@@ -793,66 +846,109 @@ function onMessage(event) {
                 cellValue.classList.remove('updated');
                 void cellValue.offsetWidth; // Force reflow
                 cellValue.classList.add('updated');
-                console.log(`Updated ${key} with value ${formattedValue}`);
             }
         });
 
-        // Log update summary
-        console.log(`Table updated with ${Object.keys(data).length} values`);
-
     } catch (error) {
-        console.error('Error processing message:', error);
+        console.error('Error processing WebSocket message:', error);
+        console.error('Raw message data:', event.data);
     }
 }
 
-function updateWatchR1Table(data) {
-    console.log('Updating table with data:', data);
-    const table = document.querySelector('.table1 tbody');
-    if (!table) {
-        console.error('Table not found!');
+// Cải thiện hàm populateTopicDropdown
+function populateTopicDropdown() {
+    const topicSelect = document.getElementById('topic');
+    if (!topicSelect) {
+        console.error('Topic dropdown element not found! ID: "topic"');
+        // Liệt kê tất cả các phần tử trong DOM để debug
+        console.log('All select elements in document:', document.querySelectorAll('select'));
         return;
     }
+    
+    console.log('Populating topic dropdown with', knownTopics.length, 'topics');
+    
+    // Xóa các option hiện tại
+    topicSelect.innerHTML = '';
+    
+    // Thêm option mặc định (wildcard)
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '#';
+    defaultOption.textContent = 'All Topics (#)';
+    topicSelect.appendChild(defaultOption);
+    
+    // Thêm các topic đã biết
+    if (knownTopics.length > 0) {
+        knownTopics.forEach(topic => {
+            const option = document.createElement('option');
+            option.value = topic;
+            option.textContent = topic;
+            topicSelect.appendChild(option);
+            console.log('Added topic to dropdown:', topic);
+        });
+    } else {
+        console.log('No topics to add to dropdown');
+    }
+    
+    // Xác nhận số lượng option sau khi cập nhật
+    console.log('Dropdown now has', topicSelect.options.length, 'options');
+}
 
-    // Tạo hoặc cập nhật các hàng trong bảng dựa trên dữ liệu JSON
-    Object.entries(data).forEach(([key, value], index) => {
-        let row = table.rows[index];
+// Thêm hàm để xử lý sự kiện nút Connect
+function setupTopicSelection() {
+    const connectButton = document.getElementById('connect-button');
+    const disconnectButton = document.getElementById('disconnect-button');
+    const topicSelect = document.getElementById('topic');
+    
+    if (!connectButton || !disconnectButton || !topicSelect) {
+        console.error('Topic selection controls not found!');
+        console.log('Connect button:', connectButton);
+        console.log('Disconnect button:', disconnectButton);
+        console.log('Topic select:', topicSelect);
+        return;
+    }
+    
+    console.log('Setting up topic selection event listeners');
+    
+    // Connect button
+    connectButton.addEventListener('click', () => {
+        const selectedTopic = topicSelect.value;
+        if (!selectedTopic) return;
         
-        // Nếu hàng chưa tồn tại, tạo mới
-        if (!row) {
-            row = table.insertRow(index);
-            row.insertCell(0).textContent = key;  // Tên biến
-            row.insertCell(1).textContent = ''; // Address (có thể để trống hoặc giá trị mặc định)
-            row.insertCell(2);                    // Ô giá trị
+        console.log('Connect button clicked. Selected topic:', selectedTopic);
+        
+        // Nếu websocket đã kết nối, gửi lệnh đăng ký topic
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            const subscribeCommand = {
+                action: 'subscribe',
+                topic: selectedTopic
+            };
+            
+            websocket.send(JSON.stringify(subscribeCommand));
+            console.log(`Requesting subscription to: ${selectedTopic}`);
+        } else {
+            console.error('WebSocket not connected');
+            alert('WebSocket is not connected. Please wait or refresh the page.');
         }
-
-        // Cập nhật giá trị
-        const valueCell = row.cells[2];
-        let formattedValue = value;
+    });
+    
+    // Disconnect button
+    disconnectButton.addEventListener('click', () => {
+        console.log('Disconnect button clicked');
         
-        // Format số thành 2 chữ số thập phân nếu là số
-        if (typeof value === 'number') {
-            formattedValue = value.toFixed(2);
+        // Nếu đang được kết nối, quay về subscribe tất cả
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            const subscribeCommand = {
+                action: 'subscribe',
+                topic: '#'
+            };
+            
+            websocket.send(JSON.stringify(subscribeCommand));
+            console.log('Disconnecting from specific topic, switching to all topics');
+        } else {
+            console.error('WebSocket not connected');
         }
-        
-        valueCell.textContent = formattedValue;
-        
-        // Thêm hiệu ứng highlight
-        valueCell.classList.add('updated');
-        setTimeout(() => valueCell.classList.remove('updated'), 1000);
-        
-        console.log(`Updated ${key} with value ${formattedValue}`);
     });
 }
-//====================================================================================================================
-
-//===========================================================================================
-// Hàm khởi tạo WebSocket và xử lý sự kiện khi trang tải xong
-
-// Initialize when page loads
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('Page loaded, initializing WebSocket...');
-    initWebSocket();
-});
 
 // Thêm hàm để hiển thị toàn bộ dữ liệu đã thu thập
 function displayFullGraph(chartId) {
@@ -897,3 +993,18 @@ function displayFullGraph(chartId) {
     chart.update();
     console.log(`Displayed full graph for ${chartId} with ${logData.labels.length} data points`);
 }
+
+// Kiểm tra kết nối WebSocket định kỳ
+setInterval(() => {
+    if (websocket && websocket.readyState === WebSocket.OPEN) {
+        console.log('WebSocket connection active');
+        // Có thể thêm code gửi ping nếu cần
+    } else if (websocket) {
+        console.error('WebSocket disconnected, state:', websocket.readyState);
+        // Kết nối lại nếu cần
+        initWebSocket();
+    } else {
+        console.error('WebSocket not initialized');
+        initWebSocket();
+    }
+}, 10000); // Kiểm tra mỗi 10 giây

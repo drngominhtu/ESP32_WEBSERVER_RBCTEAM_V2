@@ -613,3 +613,48 @@ footer {
     text-align: center;
     padding: 10px 0;
 }
+
+/* Thêm vào file style.css */
+#wifi-status.connected {
+    color: #4CAF50;
+    font-weight: bold;
+}
+
+#wifi-status.disconnected {
+    color: #f44336;
+    font-weight: bold;
+}
+
+.topic-selection {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.topic-selection label {
+    margin-right: 10px;
+}
+
+.topic-selection select {
+    padding: 5px;
+    margin-right: 10px;
+    min-width: 200px;
+}
+
+.topic-selection button {
+    padding: 5px 15px;
+    margin-right: 5px;
+    cursor: pointer;
+}
+
+#connect-button {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+}
+
+#disconnect-button {
+    background-color: #f44336;
+    color: white;
+    border: none;
+}

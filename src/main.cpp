@@ -5,6 +5,7 @@
 #include <AsyncTCP.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <set>
 
 // WiFi credentials
 const char* ssid = "AML_Robocon";
@@ -28,6 +29,10 @@ unsigned long lastMessageTime = 0;
 const unsigned long MESSAGE_INTERVAL = 25; // 100ms between messages
 const size_t MAX_QUEUE_SIZE = 32; // Maximum queue size for WebSocket messages
 
+// Lưu trữ các topic đã phát hiện
+std::set<String> knownTopics;
+String currentSubscribedTopic = "#"; // Topic đang được subscribe
+
 // Update MQTT callback
 void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     // Rate limiting check
@@ -37,7 +42,26 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     }
     lastMessageTime = currentTime;
 
-    // Tạo JSON chỉ với name và value
+    // Debug: In ra topic nhận được
+    Serial.print("Received MQTT message on topic: ");
+    Serial.println(topic);
+
+    // Lưu topic mới vào danh sách
+    String topicStr = String(topic);
+    bool isNewTopic = false;
+    
+    if (knownTopics.find(topicStr) == knownTopics.end()) {
+        knownTopics.insert(topicStr);
+        isNewTopic = true;
+        
+        // Debug: In ra khi phát hiện topic mới
+        Serial.print("New topic discovered: ");
+        Serial.println(topicStr);
+        Serial.print("Total topics known: ");
+        Serial.println(knownTopics.size());
+    }
+
+    // Tạo JSON với name và value
     StaticJsonDocument<200> doc;
     DeserializationError error = deserializeJson(doc, payload, length);
     
@@ -47,27 +71,148 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
         return;
     }
 
-    // Forward JSON message không có address
-    if (ws.count() > 0) {
-        String jsonString;
-        serializeJson(doc, jsonString);
-        ws.textAll(jsonString);
+    // Debug: In ra JSON đã parse
+    Serial.print("JSON payload: ");
+    serializeJson(doc, Serial);
+    Serial.println();
+
+    // Nếu topic hiện tại là "#" hoặc topic này là topic đang được subscribe
+    // Hoặc topic này là con của topic đang được subscribe
+    if (currentSubscribedTopic == "#" || 
+        topicStr == currentSubscribedTopic || 
+        topicStr.startsWith(currentSubscribedTopic + "/")) {
+        // Forward JSON message không có address
+        if (ws.count() > 0) {
+            String jsonString;
+            serializeJson(doc, jsonString);
+            ws.textAll(jsonString);
+            
+            // Debug: In ra khi gửi dữ liệu qua WebSocket
+            Serial.print("Forwarding data to WebSocket. Connected clients: ");
+            Serial.println(ws.count());
+        }
+    }
+
+    // Nếu có topic mới, luôn gửi danh sách cập nhật cho clients, không quan tâm ws.count()
+    if (isNewTopic) {
+        // In ra thông tin về số lượng client WebSocket
+        Serial.print("Current WebSocket clients: ");
+        Serial.println(ws.count());
+        
+        if (ws.count() > 0) {
+            // Thêm dấu ngoặc nhọn mở
+            {
+                StaticJsonDocument<1024> topicDoc;
+                topicDoc["type"] = "topic_list";
+                JsonArray topicArray = topicDoc.createNestedArray("topics");
+                
+                // In ra danh sách đầy đủ các topic đã biết
+                Serial.println("Known topics:");
+                for (const String& t : knownTopics) {
+                    topicArray.add(t);
+                    Serial.println("  - " + t);
+                }
+                
+                String topicList;
+                serializeJson(topicDoc, topicList);
+                ws.textAll(topicList);
+                
+                // Debug: In ra khi gửi danh sách topic mới
+                Serial.println("Sending updated topic list to WebSocket clients:");
+                Serial.println(topicList);
+            } // Thêm dấu ngoặc nhọn đóng
+        } else {
+            Serial.println("No WebSocket clients connected to send topic list");
+        }
     }
 }
 
 void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {
     switch (type) {
-        case WS_EVT_CONNECT:
+        case WS_EVT_CONNECT: {
+            // Debug: In ra khi có client kết nối mới
+            Serial.print("WebSocket client connected. ID: ");
+            Serial.println(client->id());
+            Serial.print("Total WebSocket clients: ");
+            Serial.println(ws.count());
+            
+            // Luôn gửi danh sách topic hiện có, ngay cả khi trống
+            StaticJsonDocument<1024> topicDoc;
+            topicDoc["type"] = "topic_list";
+            JsonArray topicArray = topicDoc.createNestedArray("topics");
+            
+            if (knownTopics.size() > 0) {
+                Serial.println("Sending topic list to new client:");
+                for (const String& t : knownTopics) {
+                    topicArray.add(t);
+                    Serial.println("  - " + t);
+                }
+            } else {
+                Serial.println("No topics available, sending empty list to new client");
+            }
+            
+            String topicList;
+            serializeJson(topicDoc, topicList);
+            client->text(topicList);
+            Serial.println("Topic list JSON sent: " + topicList);
             break;
+        }
+            
         case WS_EVT_DISCONNECT:
+            // Debug: In ra khi client ngắt kết nối
+            Serial.print("WebSocket client disconnected. ID: ");
+            Serial.println(client->id());
             break;
+            
         case WS_EVT_DATA:
             if (len > 0) {
-                // Chỉ gửi tên và giá trị
+                // Debug: In ra dữ liệu nhận được từ client
+                Serial.print("Received data from WebSocket client. Length: ");
+                Serial.println(len);
+                
                 char message[len + 1];
                 memcpy(message, data, len);
                 message[len] = '\0';
-                mqtt_client.publish("Swerve_Robot/command", message);
+                Serial.print("Message: ");
+                Serial.println(message);
+                
+                // Kiểm tra xem đây có phải là lệnh đăng ký topic mới không
+                StaticJsonDocument<200> doc;
+                DeserializationError error = deserializeJson(doc, message);
+                
+                if (!error && doc.containsKey("action")) {
+                    String action = doc["action"];
+                    
+                    if (action == "subscribe" && doc.containsKey("topic")) {
+                        String newTopic = doc["topic"];
+                        // Debug: In ra hành động đăng ký topic mới
+                        Serial.print("Subscribing to new topic: ");
+                        Serial.println(newTopic);
+                        
+                        // Hủy đăng ký topic cũ và đăng ký topic mới
+                        mqtt_client.unsubscribe(currentSubscribedTopic.c_str());
+                        currentSubscribedTopic = newTopic;
+                        mqtt_client.subscribe(currentSubscribedTopic.c_str());
+                        
+                        // Thông báo cho client
+                        StaticJsonDocument<200> response;
+                        response["type"] = "subscribe_response";
+                        response["status"] = "success";
+                        response["topic"] = newTopic;
+                        
+                        String jsonResponse;
+                        serializeJson(response, jsonResponse);
+                        client->text(jsonResponse);
+                        
+                        // Debug: In ra phản hồi gửi cho client
+                        Serial.print("Sending response: ");
+                        Serial.println(jsonResponse);
+                    }
+                } else {
+                    // Đây là lệnh khác, chuyển tiếp tới MQTT như cũ
+                    mqtt_client.publish("Swerve_Robot/command", message);
+                    Serial.println("Forwarding message to MQTT topic: Swerve_Robot/command");
+                }
             }
             break;
     }
@@ -113,6 +258,18 @@ void setup() {
 
     server.on("/script.js", HTTP_GET, [](AsyncWebServerRequest *request){
         request->send(SPIFFS, "/script.js", "application/javascript");
+    });
+    
+    server.on("/R1.html", HTTP_GET, [](AsyncWebServerRequest *request){
+        request->send(SPIFFS, "/R1.html", "text/html");
+    });
+    
+    server.on("/R2.html", HTTP_GET, [](AsyncWebServerRequest *request){
+        request->send(SPIFFS, "/R2.html", "text/html");
+    });
+    
+    server.on("/aml_logo.svg", HTTP_GET, [](AsyncWebServerRequest *request){
+        request->send(SPIFFS, "/aml_logo.svg", "image/svg+xml");
     });
 
     server.begin();
