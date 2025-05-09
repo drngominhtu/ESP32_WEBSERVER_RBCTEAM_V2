@@ -11,13 +11,17 @@ header {
 .logo {
     width: 200px;
     height: 50px;
- 
+    margin: 0;
+    padding: 0;
+    overflow: visible;
 }
 
 .logo img {
     width: 100%;
     height: 100%;
-    object-fit: fill;  /* Thay đổi từ 'contain' thành 'fill' */
+    object-fit: contain; /* Thay đổi từ 'fill' sang 'contain' để giữ tỷ lệ */
+    max-width: 100%;
+    display: block;
 }
 
 /* Style cho đoạn văn trong header */
