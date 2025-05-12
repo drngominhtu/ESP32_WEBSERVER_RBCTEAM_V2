@@ -250,7 +250,7 @@ function getWatchR1Values() {
         Array.from(table.rows).forEach(row => {
             // Lấy tên chính xác (cả chữ hoa, chữ thường)
             const name = row.cells[0].textContent.trim();
-            const value = row.cells[2].textContent.trim();
+            const value = row.cells[1].textContent.trim();
             values[name] = value;
             
             // Debug: hiển thị giá trị đang đọc
@@ -525,28 +525,40 @@ function setupGraphEventListeners(graphDiv, graphId) {
         startButton.addEventListener('click', () => {
             console.log(`Attempting to start graph ${graphId}`);
             
-            // Kiểm tra xem đã có dataset nào được thêm vào chưa
+            // Kiểm tra dataset
             if (!graphData[graphId] || Object.keys(graphData[graphId]).length === 0) {
-                alert("Vui lòng thêm ít nhất một giá trị vào biểu đồ trước khi bấm Start (sử dụng nút OK)");
-                console.log("Cannot start: No datasets added to the graph");
+                alert("Vui lòng thêm ít nhất một giá trị vào biểu đồ trước khi bấm Start");
                 return;
             }
             
-            if (!graphTimers[graphId]) {
-                // Thiết lập thời điểm bắt đầu khi bấm nút Start
-                graphStartTimes[graphId] = Date.now();
+            // Reset dữ liệu khi bắt đầu mới
+            const chart = charts[graphId];
+            if (chart) {
+                // Reset dữ liệu
+                chart.data.labels = Array(MAX_DATA_POINTS).fill('');
+                chart.data.datasets.forEach(dataset => {
+                    dataset.data = Array(MAX_DATA_POINTS).fill(null);
+                });
                 
-                // QUAN TRỌNG: KHÔNG xóa dữ liệu hiện có - chỉ thiết lập thời gian mới
-                const chart = charts[graphId];
-                if (chart) {
-                    // Chúng ta không reset dữ liệu:
-                    // chart.data.labels = Array(MAX_DATA_POINTS).fill('');
-                    
-                    // Initial update immediately
-                    updateGraph(graphId);
-                    // Then set interval for continuous updates
-                    graphTimers[graphId] = setInterval(() => updateGraph(graphId), 100); // Update every 100ms
-                    console.log(`Started timer for graph ${graphId} at time 0 (giữ lại dữ liệu cũ)`);
+                // Reset các biến trạng thái
+                graphStartTimes[graphId] = Date.now();
+                graphLogData[graphId] = {
+                    labels: [],
+                    datasets: {}
+                };
+                
+                // Khởi tạo lại datasets cho log
+                Object.keys(graphData[graphId]).forEach(valname => {
+                    graphLogData[graphId].datasets[valname] = [];
+                });
+                
+                // Cập nhật đồ thị
+                chart.update();
+                
+                // Bắt đầu timer
+                if (!graphTimers[graphId]) {
+                    graphTimers[graphId] = setInterval(() => updateGraph(graphId), 100);
+                    console.log(`Started timer for graph ${graphId}`);
                 }
             }
         });
@@ -555,19 +567,20 @@ function setupGraphEventListeners(graphDiv, graphId) {
     if (stopButton) {
         stopButton.addEventListener('click', () => {
             if (graphTimers[graphId]) {
+                // Dừng timer
                 clearInterval(graphTimers[graphId]);
                 delete graphTimers[graphId];
                 console.log(`Stopped timer for graph ${graphId}`);
                 
-                // Thông báo cho người dùng rằng dữ liệu log đã được lưu
+                // Lưu trạng thái dừng
                 if (graphLogData[graphId] && graphLogData[graphId].labels.length > 0) {
                     const numDataPoints = graphLogData[graphId].labels.length;
-                    console.log(`Đã lưu ${numDataPoints} bản ghi dữ liệu cho biểu đồ ${graphId}`);
+                    console.log(`Saved ${numDataPoints} data points for graph ${graphId}`);
                     
-                    // Hiển thị toàn bộ đồ thị
+                    // Hiển thị toàn bộ dữ liệu đã thu thập
                     displayFullGraph(graphId);
                     
-                    alert(`Đã dừng ghi dữ liệu và hiển thị toàn bộ ${numDataPoints} điểm dữ liệu. Bấm "Export CSV file" để tải xuống.`);
+                    alert(`Đã dừng ghi dữ liệu. Tổng số điểm dữ liệu: ${numDataPoints}`);
                 }
             }
         });
@@ -577,26 +590,29 @@ function setupGraphEventListeners(graphDiv, graphId) {
         resetButton.addEventListener('click', () => {
             const chart = charts[graphId];
             if (chart) {
-                // Reset biểu đồ và đồng hồ đếm thời gian
+                // Dừng timer nếu đang chạy
+                if (graphTimers[graphId]) {
+                    clearInterval(graphTimers[graphId]);
+                    delete graphTimers[graphId];
+                }
+                
+                // Reset dữ liệu đồ thị
                 chart.data.labels = Array(MAX_DATA_POINTS).fill('');
                 chart.data.datasets.forEach(dataset => {
                     dataset.data = Array(MAX_DATA_POINTS).fill(null);
                 });
                 
-                // Đặt lại thời gian bắt đầu và dữ liệu log
+                // Reset tất cả biến trạng thái
                 delete graphStartTimes[graphId];
                 delete graphLogData[graphId];
-                
-                // Đặt lại chế độ hiển thị về mặc định
                 graphDisplayMode[graphId] = 'live';
                 
-                // Đặt lại tùy chọn hiển thị trục x về mặc định
+                // Reset tùy chọn hiển thị
                 chart.options.scales.x = {
-                    animation: {
-                        duration: 0 // Remove scale animations
-                    }
+                    animation: { duration: 0 }
                 };
                 
+                // Cập nhật đồ thị
                 chart.update();
                 console.log(`Reset graph ${graphId} completely`);
             }
@@ -952,6 +968,7 @@ function setupTopicSelection() {
 
 // Thêm hàm để hiển thị toàn bộ dữ liệu đã thu thập
 function displayFullGraph(chartId) {
+    console.log(`Attempting to display full graph for ${chartId}`);
     const chart = charts[chartId];
     if (!chart) {
         console.error(`Chart ${chartId} not found`);
@@ -959,10 +976,19 @@ function displayFullGraph(chartId) {
     }
 
     // Kiểm tra xem có dữ liệu log không
-    if (!graphLogData[chartId] || graphLogData[chartId].labels.length === 0) {
-        console.log("No log data available to display full graph");
+    if (!graphLogData[chartId]) {
+        console.error(`No graphLogData object for ${chartId}`);
         return;
     }
+    
+    if (!graphLogData[chartId].labels || graphLogData[chartId].labels.length === 0) {
+        console.error(`No labels data in graphLogData for ${chartId}`);
+        return;
+    }
+
+    // Log chi tiết về dữ liệu
+    console.log(`Graph log data for ${chartId}:`, graphLogData[chartId]);
+    console.log(`Number of data points: ${graphLogData[chartId].labels.length}`);
 
     // Lấy dữ liệu log đã lưu từ Start đến Stop
     const logData = graphLogData[chartId];
@@ -978,6 +1004,9 @@ function displayFullGraph(chartId) {
         const valname = dataset.label;
         if (logData.datasets[valname]) {
             dataset.data = [...logData.datasets[valname]]; // Sử dụng tất cả dữ liệu đã ghi
+            console.log(`Updated dataset ${valname} with ${logData.datasets[valname].length} points`);
+        } else {
+            console.error(`No log data for dataset ${valname}`);
         }
     });
     
