@@ -272,6 +272,20 @@ void setup() {
         request->send(SPIFFS, "/aml_logo.svg", "image/svg+xml");
     });
 
+    // Đảm bảo rằng bạn có code xử lý route cho map.html
+    server.on("/map.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(SPIFFS, "/map.html", "text/html");
+    });
+
+    // Tương tự, nếu có stylemap.css và scriptmap.js riêng biệt:
+    server.on("/stylemap.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(SPIFFS, "/stylemap.css", "text/css");
+    });
+
+    server.on("/scriptmap.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(SPIFFS, "/scriptmap.js", "application/javascript");
+    });
+
     server.begin();
     Serial.println("HTTP server started");
 }

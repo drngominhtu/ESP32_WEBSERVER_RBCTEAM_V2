@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>R1 Page</title>
-    <link rel="stylesheet" href="style.css">
+    <title>ParameterTracking Website R1</title>
+    <!-- <link rel="stylesheet" href="style.css"> -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -12,9 +12,20 @@
         <!-- Header -->
         <header>
             <div class="logo">
-                <img src="aml_logo.svg" alt="logo">
+                <img src="/aml_logo.svg" alt="Logo">
             </div>
+
             <div class="headpara">
+                <div class="wifi-info">
+                    <p><span class="info-label">WiFi SSID:</span> <span id="wifi-ssid">AML_Robocon</span></p>
+                    <p><span class="info-label">IP Address:</span> <span id="ip-address">--</span></p>
+                    <p><span class="info-label">Status:</span> <span id="wifi-status" class="status">--</span></p>
+                </div>
+                
+                <!-- Thêm phần hiển thị topic cố định -->
+                <div class="topic-status">
+                    <p><span class="info-label">Fixed Topic:</span> <span id="fixed-topic">R1/data</span></p>
+                </div>
             </div>
         </header>
 
@@ -24,74 +35,155 @@
             <div class="sidebar">
                 <ul>
                     <li onclick="location.href='/'">OVERALL</li>
-                    <li>R1</li>
+                    <li class="active">R1</li>
                     <li onclick="location.href='R2.html'">R2</li>
                 </ul>
             </div>
 
-            <!-- Khu vực biểu đồ -->
-            <div class="graph">
-                <div class="subgraph1">
-                    <!-- First graph template -->
-                    <div class="subgraph1_1">
-                        <div class="graphUI">
-                            <div class="graph-container">
-                                <canvas id="myLineChart_1"></canvas>
-                            </div>
-                            <div class="addvalsbutton">
-                                <div class="addvalgraph">
-                                    <div class="input-field">
-                                        <label for="valname_1">#Valname</label>
-                                        <input type="text" id="valname_1" placeholder="Enter value name">
+            <div class="main-content">
+                <!-- Khu vực WatchR1 Table -->
+                <div class="watch-table-section">
+                    <h3>WatchR1 Table</h3>
+                    <table class="table1">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Dữ liệu sẽ được thêm vào động -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Khu vực biểu đồ -->
+                <div class="graph-section">
+                    <div class="addgraphbutton">
+                        <button>ADD NEW GRAPH</button>
+                    </div>
+                    
+                    <div class="subgraph1">
+                        <!-- First graph template -->
+                        <div class="subgraph1_1">
+                            <div class="graphUI">
+                                <div class="graph-container">
+                                    <canvas id="myLineChart_1"></canvas>
+                                </div>
+                                <div class="graph-controls">
+                                    <div class="addvalsbutton">
+                                        <div class="addvalgraph">
+                                            <div class="input-field">
+                                                <label for="valname_1">#Valname</label>
+                                                <input type="text" id="valname_1" placeholder="Enter value name">
+                                            </div>
+                                        </div>
+                                        <div class="okbutton">
+                                            <button>OK</button>
+                                        </div>
                                     </div>
-                                    <div class="input-field">
-                                        <label for="address_1">#Address</label>
-                                        <input type="text" id="address_1" placeholder="Enter address">
+                                    <div class="exbutton">
+                                        <ul>
+                                            <li>Start</li>
+                                            <li>Stop</li>
+                                            <li>Reset</li>
+                                            <li>Export CSV file</li>
+                                        </ul>
                                     </div>
                                 </div>
-                                <div class="okbutton">
-                                    <button>OK</button>
-                                </div>
-                            </div>
-                            <div class="exbutton">
-                                <ul>
-                                    <li>Start</li>
-                                    <li>Stop</li>
-                                    <li>Reset</li>
-                                    <li>Export CSV file</li>
-                                </ul>
                             </div>
                         </div>
-                    </div>
-                </div>
-                
-                <div class="addgraphbutton">
-                    <button>ADD NEW GRAPH</button>
-                </div>
-            </div>
-
-            <!-- Bảng điều khiển -->
-            <div class="subgraph2">
-                <div class="table">
-                    <div class="table1">
-                        <h3 class="table-title">WatchR1</h3>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Variable</th>
-                                    <th>Address</th>
-                                    <th>Value</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Bảng sẽ được cập nhật động từ JavaScript -->
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             </div>
         </div>
     </main>
-    <script src="script.js"></script>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; Designed by Dr.ngominhtu - AML_RBCTEAM25</p>
+    </footer>
+
+    <!-- Thêm inline CSS cho bố cục phù hợp với ảnh -->
+    <style>
+        .main-content {
+            display: flex;
+            flex-wrap: wrap;
+        }
+        
+        .watch-table-section {
+            flex: 0 0 100%;
+            margin-bottom: 20px;
+        }
+        
+        .graph-section {
+            flex: 1;
+            position: relative;
+        }
+        
+        .addgraphbutton {
+            position: absolute;
+            right: 0;
+            top: -40px;
+        }
+        
+        .addgraphbutton button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .table1 {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .table1 th, .table1 td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        .table1 th {
+            background-color: #333;
+            color: white;
+        }
+        
+        .graphUI {
+            border: 1px solid #ddd;
+            background-color: #fff;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .graph-container {
+            height: 300px;
+            margin-bottom: 20px;
+        }
+        
+        .exbutton ul {
+            display: flex;
+            list-style: none;
+            padding: 0;
+            margin: 10px 0;
+        }
+        
+        .exbutton ul li {
+            padding: 8px 15px;
+            margin-right: 10px;
+            background-color: #444;
+            color: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+    </style>
+
+    <!-- Liên kết file JavaScript -->
+    <script src="scriptR1.js"></script>
 </body>
 </html>
+
