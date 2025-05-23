@@ -45,7 +45,7 @@ function onMessageArrived(message) {
     }
 }
 
-// Cập nhật bảng WatchR1 với dữ liệu mới từ MQTT
+// Cập nhật bảng WatchR1 với dữ liệu mới từ MQTT boker
 //----------------------------------------------------------------------------------------------
 function updateWatchR1Values(data) {
     const table = document.querySelector('.table1 tbody');
@@ -84,6 +84,7 @@ function updateWatchR1Values(data) {
             const cellValue = row.cells[1];
             const formattedValue = typeof value === 'number' ? 
                 value.toFixed(2) : value;
+
 
             // Only update and animate if value has changed
             if (cellValue.textContent !== String(formattedValue)) {
