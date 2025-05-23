@@ -43,8 +43,8 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     lastMessageTime = currentTime;
 
     // Debug: In ra topic nhận được
-    Serial.print("Received MQTT message on topic: ");
-    Serial.println(topic);
+    // Serial.print("Received MQTT message on topic: ");
+    // Serial.println(topic);
 
     // Lưu topic mới vào danh sách
     String topicStr = String(topic);
@@ -55,10 +55,10 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
         isNewTopic = true;
         
         // Debug: In ra khi phát hiện topic mới
-        Serial.print("New topic discovered: ");
-        Serial.println(topicStr);
-        Serial.print("Total topics known: ");
-        Serial.println(knownTopics.size());
+        // Serial.print("New topic discovered: ");
+        // Serial.println(topicStr);
+        // Serial.print("Total topics known: ");
+        // Serial.println(knownTopics.size());
     }
 
     // Tạo JSON với name và value
@@ -72,9 +72,9 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     }
 
     // Debug: In ra JSON đã parse
-    Serial.print("JSON payload: ");
-    serializeJson(doc, Serial);
-    Serial.println();
+    // Serial.print("JSON payload: ");
+    // serializeJson(doc, Serial);
+    // Serial.println();
 
     // Nếu topic hiện tại là "#" hoặc topic này là topic đang được subscribe
     // Hoặc topic này là con của topic đang được subscribe
@@ -88,16 +88,16 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
             ws.textAll(jsonString);
             
             // Debug: In ra khi gửi dữ liệu qua WebSocket
-            Serial.print("Forwarding data to WebSocket. Connected clients: ");
-            Serial.println(ws.count());
+            // Serial.print("Forwarding data to WebSocket. Connected clients: ");
+            // Serial.println(ws.count());
         }
     }
 
     // Nếu có topic mới, luôn gửi danh sách cập nhật cho clients, không quan tâm ws.count()
     if (isNewTopic) {
         // In ra thông tin về số lượng client WebSocket
-        Serial.print("Current WebSocket clients: ");
-        Serial.println(ws.count());
+        // Serial.print("Current WebSocket clients: ");
+        // Serial.println(ws.count());
         
         if (ws.count() > 0) {
             // Thêm dấu ngoặc nhọn mở
@@ -107,10 +107,10 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
                 JsonArray topicArray = topicDoc.createNestedArray("topics");
                 
                 // In ra danh sách đầy đủ các topic đã biết
-                Serial.println("Known topics:");
+                // Serial.println("Known topics:");
                 for (const String& t : knownTopics) {
                     topicArray.add(t);
-                    Serial.println("  - " + t);
+                    // Serial.println("  - " + t);
                 }
                 
                 String topicList;
@@ -118,8 +118,8 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
                 ws.textAll(topicList);
                 
                 // Debug: In ra khi gửi danh sách topic mới
-                Serial.println("Sending updated topic list to WebSocket clients:");
-                Serial.println(topicList);
+                // Serial.println("Sending updated topic list to WebSocket clients:");
+                // Serial.println(topicList);
             } // Thêm dấu ngoặc nhọn đóng
         } else {
             Serial.println("No WebSocket clients connected to send topic list");
@@ -131,10 +131,10 @@ void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventTyp
     switch (type) {
         case WS_EVT_CONNECT: {
             // Debug: In ra khi có client kết nối mới
-            Serial.print("WebSocket client connected. ID: ");
-            Serial.println(client->id());
-            Serial.print("Total WebSocket clients: ");
-            Serial.println(ws.count());
+            // Serial.print("WebSocket client connected. ID: ");
+            // Serial.println(client->id());
+            // Serial.print("Total WebSocket clients: ");
+            // Serial.println(ws.count());
             
             // Luôn gửi danh sách topic hiện có, ngay cả khi trống
             StaticJsonDocument<1024> topicDoc;
@@ -160,21 +160,21 @@ void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventTyp
             
         case WS_EVT_DISCONNECT:
             // Debug: In ra khi client ngắt kết nối
-            Serial.print("WebSocket client disconnected. ID: ");
-            Serial.println(client->id());
+            // Serial.print("WebSocket client disconnected. ID: ");
+            // Serial.println(client->id());
             break;
             
         case WS_EVT_DATA:
             if (len > 0) {
                 // Debug: In ra dữ liệu nhận được từ client
-                Serial.print("Received data from WebSocket client. Length: ");
-                Serial.println(len);
+                // Serial.print("Received data from WebSocket client. Length: ");
+                // Serial.println(len);
                 
                 char message[len + 1];
                 memcpy(message, data, len);
                 message[len] = '\0';
-                Serial.print("Message: ");
-                Serial.println(message);
+                // Serial.print("Message: ");
+                // Serial.println(message);
                 
                 // Kiểm tra xem đây có phải là lệnh đăng ký topic mới không
                 StaticJsonDocument<200> doc;
@@ -186,8 +186,8 @@ void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventTyp
                     if (action == "subscribe" && doc.containsKey("topic")) {
                         String newTopic = doc["topic"];
                         // Debug: In ra hành động đăng ký topic mới
-                        Serial.print("Subscribing to new topic: ");
-                        Serial.println(newTopic);
+                        // Serial.print("Subscribing to new topic: ");
+                        // Serial.println(newTopic);
                         
                         // Hủy đăng ký topic cũ và đăng ký topic mới
                         mqtt_client.unsubscribe(currentSubscribedTopic.c_str());
@@ -205,13 +205,13 @@ void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventTyp
                         client->text(jsonResponse);
                         
                         // Debug: In ra phản hồi gửi cho client
-                        Serial.print("Sending response: ");
-                        Serial.println(jsonResponse);
+                        // Serial.print("Sending response: ");
+                        // Serial.println(jsonResponse);
                     }
                 } else {
                     // Đây là lệnh khác, chuyển tiếp tới MQTT như cũ
-                    mqtt_client.publish("Swerve_Robot/command", message);
-                    Serial.println("Forwarding message to MQTT topic: Swerve_Robot/command");
+                    mqtt_client.publish("#", message);
+                    // Serial.println("Forwarding message to MQTT topic: Swerve_Robot/command");
                 }
             }
             break;
@@ -260,13 +260,13 @@ void setup() {
         request->send(SPIFFS, "/script.js", "application/javascript");
     });
     
-    server.on("/R1.html", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(SPIFFS, "/R1.html", "text/html");
-    });
+    // server.on("/R1.html", HTTP_GET, [](AsyncWebServerRequest *request){
+    //     request->send(SPIFFS, "/R1.html", "text/html");
+    // });
     
-    server.on("/R2.html", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(SPIFFS, "/R2.html", "text/html");
-    });
+    // server.on("/R2.html", HTTP_GET, [](AsyncWebServerRequest *request){
+    //     request->send(SPIFFS, "/R2.html", "text/html");
+    // });
     
     server.on("/aml_logo.svg", HTTP_GET, [](AsyncWebServerRequest *request){
         request->send(SPIFFS, "/aml_logo.svg", "image/svg+xml");
