@@ -318,7 +318,8 @@ function updateGraph(chartId) {
             const dataset = chart.data.datasets[info.datasetIndex];
             const numValue = parseFloat(value);
             
-            if (!isNaN(numValue)) {
+            // THÊM KIỂM TRA GIỚI HẠN 10000 Ở ĐÂY
+            if (!isNaN(numValue) && Math.abs(numValue) <= 10000) {
                 // Push new value - làm tròn đến 2 chữ số thập phân
                 const roundedValue = parseFloat(numValue.toFixed(2));
                 dataset.data.push(roundedValue);
@@ -329,6 +330,19 @@ function updateGraph(chartId) {
                 // Lưu giá trị vào log data nếu đang ghi log - cũng làm tròn đến 2 chữ số thập phân
                 if (graphTimers[chartId] && graphLogData[chartId]) {
                     graphLogData[chartId].datasets[valname].push(roundedValue);
+                }
+                
+                hasNewData = true;
+            } else if (!isNaN(numValue) && Math.abs(numValue) > 10000) {
+                // Giá trị vượt quá giới hạn, thêm giá trị null để giữ liên tục chuỗi thời gian
+                dataset.data.push(null);
+                if (dataset.data.length > MAX_DATA_POINTS) {
+                    dataset.data.shift();
+                }
+                
+                // Vẫn lưu thời gian nhưng đánh dấu giá trị là null trong log
+                if (graphTimers[chartId] && graphLogData[chartId]) {
+                    graphLogData[chartId].datasets[valname].push(null);
                 }
                 
                 hasNewData = true;
@@ -592,7 +606,7 @@ function setupGraphEventListeners(graphDiv, graphId) {
                 delete graphTimers[graphId];
                 console.log(`Stopped timer for graph ${graphId}`);
                 
-                // Lưu trạng thái dừng
+                // Lưu trạng thái dừng và hiển thị toàn bộ dữ liệu
                 if (graphLogData[graphId] && graphLogData[graphId].labels.length > 0) {
                     const numDataPoints = graphLogData[graphId].labels.length;
                     console.log(`Saved ${numDataPoints} data points for graph ${graphId}`);
@@ -690,6 +704,21 @@ function createChart(canvasId) {
                 legend: {
                     labels: {
                         boxWidth: 2 // Smaller legend items
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        // Hiển thị giá trị có tối đa 2 chữ số thập phân trong tooltip
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += parseFloat(context.parsed.y.toFixed(2));
+                            }
+                            return label;
+                        }
                     }
                 }
             },
@@ -1002,5 +1031,75 @@ function populateTopicDropdown(topics) {
         option.value = topic;
         option.textContent = topic;
         topicSelect.appendChild(option);
+    });
+}
+
+// Thêm hàm mới để hiển thị toàn bộ dữ liệu đã ghi
+function displayFullGraph(chartId) {
+    const chart = charts[chartId];
+    const logData = graphLogData[chartId];
+    
+    if (!chart || !logData || !logData.labels || logData.labels.length === 0) {
+        console.log("Không có dữ liệu để hiển thị");
+        return;
+    }
+    
+    // Lưu trạng thái hiển thị
+    graphDisplayMode[chartId] = 'full';
+    
+    // Đặt lại dữ liệu cho chart để hiển thị toàn bộ từ đầu đến cuối
+    chart.data.labels = [...logData.labels]; // Sao chép tất cả nhãn thời gian
+    
+    // Cập nhật dữ liệu cho tất cả datasets
+    let datasetIndex = 0;
+    for (const [valname, values] of Object.entries(logData.datasets)) {
+        if (datasetIndex < chart.data.datasets.length) {
+            chart.data.datasets[datasetIndex].data = [...values]; // Sao chép toàn bộ dữ liệu
+            datasetIndex++;
+        }
+    }
+    
+    // Cấu hình lại scales để hiển thị tốt hơn
+    chart.options.scales.x = {
+        animation: { duration: 0 },
+        ticks: {
+            // Hiển thị ít nhãn hơn để tránh chen chúc
+            maxTicksLimit: 10,
+            callback: function(value, index) {
+                // Chỉ hiển thị một số nhãn để đảm bảo đọc được
+                if (logData.labels.length < 10 || index % Math.ceil(logData.labels.length / 10) === 0) {
+                    return logData.labels[index];
+                }
+                return '';
+            }
+        }
+    };
+    
+    // Cập nhật biểu đồ
+    chart.update();
+    
+    console.log(`Hiển thị toàn bộ ${logData.labels.length} điểm dữ liệu từ đầu đến cuối`);
+}
+
+// Sửa lại stopButton handler để gọi displayFullGraph
+if (stopButton) {
+    stopButton.addEventListener('click', () => {
+        if (graphTimers[graphId]) {
+            // Dừng timer
+            clearInterval(graphTimers[graphId]);
+            delete graphTimers[graphId];
+            console.log(`Stopped timer for graph ${graphId}`);
+            
+            // Lưu trạng thái dừng và hiển thị toàn bộ dữ liệu
+            if (graphLogData[graphId] && graphLogData[graphId].labels.length > 0) {
+                const numDataPoints = graphLogData[graphId].labels.length;
+                console.log(`Saved ${numDataPoints} data points for graph ${graphId}`);
+                
+                // Hiển thị toàn bộ dữ liệu đã thu thập
+                displayFullGraph(graphId);
+                
+                alert(`Đã dừng ghi dữ liệu. Tổng số điểm dữ liệu: ${numDataPoints}`);
+            }
+        }
     });
 }
