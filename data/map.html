@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Position Map</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Inline CSS cơ bản để đảm bảo hiển thị */
+        .map-container {
+            width: 100%;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .map-view {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            background-color: #f9f9f9;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        #position-map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .r1-color {
+            background-color: #FF5733;
+        }
+        
+        .r2-color {
+            background-color: #3498DB;
+        }
+        
+        .map-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        
+        .stat-item {
+            background-color: #f5f5f5;
+            padding: 10px 15px;
+            border-radius: 5px;
+        }
+
+        /* Thêm CSS cho phần hiển thị debug */
+        #mqtt-debug {
+            display: none; /* Ẩn mặc định */
+            background-color: #f0f0f0;
+            padding: 10px;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        #mqtt-debug strong {
+            color: #333;
+        }
+
+        .map-controls {
+            display: flex;
+            gap: 10px;
+            margin-left: auto;
+        }
+        
+        .map-controls button {
+            padding: 5px 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .map-controls button:hover {
+            background-color: #45a049;
+        }
+
+        .coordinate-details {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 8px;
+        }
+        
+        .coordinate-details h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        
+        .coord-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+        
+        .coord-table th, .coord-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        
+        .coord-table th {
+            background-color: #444;
+            color: white;
+        }
+        
+        .origin-info {
+            font-style: italic;
+            color: #666;
+        }
+        
+        #origin-select {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <!-- Header -->
+        <header>
+            <div class="logo">
+                <img src="/aml_logo.svg" alt="Logo">
+            </div>
+
+            <div class="headpara">
+                <div class="wifi-info">
+                    <p><span class="info-label">WiFi SSID:</span> <span id="wifi-ssid">AML_Robocon</span></p>
+                    <p><span class="info-label">IP Address:</span> <span id="ip-address">--</span></p>
+                    <p><span class="info-label">Status:</span> <span id="wifi-status" class="status">--</span></p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Phần nội dung chính -->
+        <div class="bottom">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <ul>
+                    <li onclick="location.href='/'">OVERALL</li>
+                    <!-- <li onclick="location.href='R1.html'">R1</li>
+                    <li onclick="location.href='R2.html'">R2</li> -->
+                    <li class="active">MAP</li>
+                </ul>
+            </div>
+
+            <div class="main-content">
+                <div class="map-container">
+                    <h2>Position Tracking Map (15m x 8m)</h2>
+                    
+                    <div class="map-info">
+                        <div class="map-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">R1 Position:</span>
+                                <span id="r1-position">X: 0.00m, Y: 0.00m</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">R2 Position:</span>
+                                <span id="r2-position">X: 0.00m, Y: 0.00m</span>
+                            </div>
+                        </div>
+
+                        <!-- Thêm vào phần map-info -->
+                        <div class="map-controls">
+                            <button id="reset-trail-btn" onclick="resetTrails()">Reset Trails</button>
+                            <button id="center-view-btn" onclick="centerView()">Center View</button>
+                            <button id="toggle-simulation-btn" onclick="toggleSimulation()">Toggle Simulation</button>
+                            <select id="origin-select" onchange="changeOrigin(this.value)">
+                                <option value="bottom-left">Origin: Bottom Left</option>
+                                <option value="bottom-right">Origin: Bottom Right</option>
+                                <option value="center">Origin: Center</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="map-view">
+                        <canvas id="position-map"></canvas>
+                    </div>
+
+                    <!-- Thêm phần hiển thị debug từ broker -->
+                    <div id="mqtt-debug"></div>
+
+                    <!-- Thêm div hiển thị chi tiết vào sau map-view -->
+                    <div class="coordinate-details">
+                        <h3>Robot Coordinate Details</h3>
+                        <table class="coord-table">
+                            <thead>
+                                <tr>
+                                    <th>Robot</th>
+                                    <th>Real X</th>
+                                    <th>Real Y</th>
+                                    <th>Canvas X</th>
+                                    <th>Canvas Y</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr id="r1-coord-detail">
+                                    <td>R1</td>
+                                    <td>0.00</td>
+                                    <td>0.00</td>
+                                    <td>0</td>
+                                    <td>0</td>
+                                </tr>
+                                <tr id="r2-coord-detail">
+                                    <td>R2</td>
+                                    <td>0.00</td>
+                                    <td>0.00</td>
+                                    <td>0</td>
+                                    <td>0</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="origin-info">
+                            <p>Current Origin: <span id="current-origin">Bottom Left</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; Designed by Dr.ngominhtu - AML_RBCTEAM25</p>
+    </footer>
+
+    <!-- Liên kết file JavaScript đơn giản -->
+    <script>
+        // Khai báo biến toàn cục
+        let ctx;
+        let canvas;
+        let canvasWidth;
+        let canvasHeight;
+        const FIELD_WIDTH = 15; // Chiều rộng thực tế 15m
+        const FIELD_HEIGHT = 8; // Chiều cao thực tế 8m
+        const ROBOT_DIAMETER = 0.8; // Đường kính robot 0.8m
+        let scaleX, scaleY;
+
+        // Vị trí robot
+        const robotPositions = {
+            R1: { x: 0, y: 0, color: '#FF5733', updated: false },
+            R2: { x: 0, y: 0, color: '#3498DB', updated: false }
+        };
+
+        // Biến toàn cục để theo dõi mô phỏng
+        let simulationInterval;
+        let hasRealData = false;
+
+        // Đường đi của robot (cho phần vết đi)
+        const robotTrails = {
+            R1: [],
+            R2: []
+        };
+
+        // Khởi tạo khi trang được tải
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Map page loaded, initializing...');
+            
+            // Lấy canvas và context
+            canvas = document.getElementById('position-map');
+            if (!canvas) {
+                console.error('Canvas not found');
+                return;
+            }
+            
+            ctx = canvas.getContext('2d');
+            
+            // Thiết lập kích thước canvas
+            resizeCanvas();
+            
+            // Theo dõi sự kiện resize
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Kết nối WebSocket
+            initWebSocket();
+            
+            // Vẽ bản đồ ban đầu
+            drawMap();
+            
+            // Để test, khởi động mô phỏng vị trí
+            startSimulation();
+            
+            // Đọc cấu hình đã lưu
+            loadConfig();
+        });
+
+        // Thay đổi kích thước canvas khi cửa sổ thay đổi
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvasWidth = container.clientWidth;
+            canvasHeight = container.clientHeight;
+            
+            // Cập nhật kích thước canvas
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            
+            // Tính toán tỷ lệ scale
+            scaleX = canvasWidth / FIELD_WIDTH;
+            scaleY = canvasHeight / FIELD_HEIGHT;
+            
+            // Vẽ lại bản đồ
+            drawMap();
+        }
+
+        // Khởi tạo WebSocket
+        function initWebSocket() {
+            try {
+                // Sử dụng hostname hiện tại hoặc mặc định
+                const host = window.location.hostname || '192.168.5.1';
+                const ws = new WebSocket(`ws://${host}/ws`);
+                
+                ws.onopen = function() {
+                    console.log('WebSocket Connected!');
+                    document.getElementById('wifi-status').textContent = "Connected";
+                    document.getElementById('wifi-status').className = "status connected";
+                    
+                    // Đăng ký nhận topic
+                    const subscribeMsg = JSON.stringify({action: "subscribe", topic: "#"});
+                    ws.send(subscribeMsg);
+                };
+                
+                ws.onclose = function() {
+                    console.log('WebSocket Disconnected!');
+                    document.getElementById('wifi-status').textContent = "Disconnected";
+                    document.getElementById('wifi-status').className = "status disconnected";
+                    
+                    // Thử kết nối lại sau 3 giây
+                    setTimeout(initWebSocket, 3000);
+                };
+                
+                // Sửa lại hàm xử lý onmessage trong WebSocket:
+                ws.onmessage = function(evt) {
+                    try {
+                        const data = JSON.parse(evt.data);
+                        console.log("Received data:", data); // Log dữ liệu nhận được để debug
+                        
+                        // Kiểm tra xem message có phải từ topic hay không
+                        if (data.type === 'subscribe_response') {
+                            console.log(`Subscription to ${data.topic}: ${data.success ? 'successful' : 'failed'}`);
+                            return;
+                        }
+                        
+                        // Kiểm tra dữ liệu từ các topic riêng lẻ trước
+                        if (data.topic) {
+                            // Trích xuất các phần của topic để phân biệt R1 và R2
+                            const topicParts = data.topic.split('/');
+                            const robotName = topicParts[0]; // R1 hoặc R2
+                            
+                            // R1 encoderX
+                            if (data.topic === "R1/data/encoderX" || data.topic.endsWith("/encoderX")) {
+                                // Trực tiếp kiểm tra giá trị nhận được
+                                console.log(`Found R1 encoderX data: ${JSON.stringify(data)}`);
+                                // Kiểm tra cả hai định dạng có thể có
+                                const xValue = data.value !== undefined ? data.value : data.encoderX;
+                                updateSingleCoordinate("R1", "x", xValue);
+                                return;
+                            }
+                            
+                            // R1 encoderY
+                            if (data.topic === "R1/data/encoderY" || data.topic.endsWith("/encoderY")) {
+                                console.log(`Found R1 encoderY data: ${JSON.stringify(data)}`);
+                                const yValue = data.value !== undefined ? data.value : data.encoderY;
+                                updateSingleCoordinate("R1", "y", yValue);
+                                return;
+                            }
+                            
+                            // R2 encoderX
+                            if (data.topic === "R2/data/encoderX" || data.topic.endsWith("/encoderX")) {
+                                const xValue = data.value !== undefined ? data.value : data.encoderX;
+                                updateSingleCoordinate("R2", "x", xValue);
+                                return;
+                            }
+                            
+                            // R2 encoderY
+                            if (data.topic === "R2/data/encoderY" || data.topic.endsWith("/encoderY")) {
+                                const yValue = data.value !== undefined ? data.value : data.encoderY;
+                                updateSingleCoordinate("R2", "y", yValue);
+                                return;
+                            }
+                            
+                            // Kiểm tra topic tổng hợp
+                            if ((robotName === "R1" || robotName === "R2") && 
+                                (data.topic.includes("data") || data.topic.includes("encoder"))) {
+                                processRobotData(data, robotName);
+                            }
+                        } else {
+                            // Kiểm tra dữ liệu cụ thể cho R1 và R2 không có topic
+                            if (data.encoderX !== undefined || data.encoderY !== undefined) {
+                                // Nếu không có topic, xác định robot từ dữ liệu
+                                const robotName = data.robot || data.name || "R1"; // Mặc định là R1
+                                processRobotData(data, robotName);
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Error processing message:", e, "Raw data:", evt.data);
+                    }
+                };
+            } catch (error) {
+                console.error('Failed to create WebSocket:', error);
+            }
+        }
+
+        // Cập nhật hiển thị vị trí
+        function updatePositionDisplay(elementId, x, y) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = `X: ${x.toFixed(2)}m, Y: ${y.toFixed(2)}m`;
+            }
+        }
+
+        // Vẽ bản đồ
+        function drawMap() {
+            if (!ctx) return;
+            
+            // Xóa canvas
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+            
+            // Vẽ biên sân
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(0, 0, canvasWidth, canvasHeight);
+            
+            // Vẽ lưới
+            const gridSizeM = 1; // Kích thước ô lưới (1m)
+            const gridSizeX = gridSizeM * scaleX;
+            const gridSizeY = gridSizeM * scaleY;
+            
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 0.5;
+            
+            // Vẽ lưới dọc
+            for (let x = gridSizeX; x < canvasWidth; x += gridSizeX) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvasHeight);
+                ctx.stroke();
+            }
+            
+            // Vẽ lưới ngang
+            for (let y = gridSizeY; y < canvasHeight; y += gridSizeY) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvasWidth, y);
+                ctx.stroke();
+            }
+            
+            // Vẽ trục tọa độ dựa theo gốc đã chọn
+            drawCoordinateAxes();
+            
+            // Vẽ vị trí robot
+            drawRobots();
+        }
+        
+        // Thêm hàm vẽ các trục tọa độ
+        function drawCoordinateAxes() {
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            ctx.fillStyle = '#666';
+            ctx.font = '10px Arial';
+            
+            switch (coordinateOrigin) {
+                case "bottom-left":
+                    // Vẽ trục X
+                    ctx.beginPath();
+                    ctx.moveTo(0, canvasHeight);
+                    ctx.lineTo(canvasWidth, canvasHeight);
+                    ctx.stroke();
+                    
+                    // Vẽ trục Y
+                    ctx.beginPath();
+                    ctx.moveTo(0, canvasHeight);
+                    ctx.lineTo(0, 0);
+                    ctx.stroke();
+                    
+                    // Vẽ vạch chia X
+                    for (let i = 0; i <= FIELD_WIDTH; i++) {
+                        const x = i * scaleX;
+                        ctx.beginPath();
+                        ctx.moveTo(x, canvasHeight);
+                        ctx.lineTo(x, canvasHeight - 5);
+                        ctx.stroke();
+                        
+                        if (i % 2 === 0) {
+                            ctx.textAlign = 'center';
+                            ctx.fillText(`${i}m`, x, canvasHeight - 10);
+                        }
+                    }
+                    
+                    // Vẽ vạch chia Y
+                    for (let i = 0; i <= FIELD_HEIGHT; i++) {
+                        const y = canvasHeight - i * scaleY;
+                        ctx.beginPath();
+                        ctx.moveTo(0, y);
+                        ctx.lineTo(5, y);
+                        ctx.stroke();
+                        
+                        if (i % 2 === 0) {
+                            ctx.textAlign = 'left';
+                            ctx.fillText(`${i}m`, 10, y + 3);
+                        }
+                    }
+                    break;
+                    
+                case "bottom-right":
+                    // Vẽ trục X
+                    ctx.beginPath();
+                    ctx.moveTo(canvasWidth, canvasHeight);
+                    ctx.lineTo(0, canvasHeight);
+                    ctx.stroke();
+                    
+                    // Vẽ trục Y
+                    ctx.beginPath();
+                    ctx.moveTo(canvasWidth, canvasHeight);
+                    ctx.lineTo(canvasWidth, 0);
+                    ctx.stroke();
+                    
+                    // Vẽ vạch chia X
+                    for (let i = 0; i <= FIELD_WIDTH; i++) {
+                        const x = canvasWidth - i * scaleX;
+                        ctx.beginPath();
+                        ctx.moveTo(x, canvasHeight);
+                        ctx.lineTo(x, canvasHeight - 5);
+                        ctx.stroke();
+                        
+                        if (i % 2 === 0) {
+                            ctx.textAlign = 'center';
+                            ctx.fillText(`${i}m`, x, canvasHeight - 10);
+                        }
+                    }
+                    
+                    // Vẽ vạch chia Y
+                    for (let i = 0; i <= FIELD_HEIGHT; i++) {
+                        const y = canvasHeight - i * scaleY;
+                        ctx.beginPath();
+                        ctx.moveTo(canvasWidth, y);
+                        ctx.lineTo(canvasWidth - 5, y);
+                        ctx.stroke();
+                        
+                        if (i % 2 === 0) {
+                            ctx.textAlign = 'right';
+                            ctx.fillText(`${i}m`, canvasWidth - 10, y + 3);
+                        }
+                    }
+                    break;
+                    
+                case "center":
+                default:
+                    // Vẽ trục X
+                    ctx.beginPath();
+                    ctx.moveTo(0, canvasHeight / 2);
+                    ctx.lineTo(canvasWidth, canvasHeight / 2);
+                    ctx.stroke();
+                    
+                    // Vẽ trục Y
+                    ctx.beginPath();
+                    ctx.moveTo(canvasWidth / 2, 0);
+                    ctx.lineTo(canvasWidth / 2, canvasHeight);
+                    ctx.stroke();
+                    
+                    // Vẽ vạch chia X
+                    for (let i = 0; i <= FIELD_WIDTH; i++) {
+                        const x = i * scaleX;
+                        ctx.beginPath();
+                        ctx.moveTo(x, canvasHeight / 2 - 5);
+                        ctx.lineTo(x, canvasHeight / 2 + 5);
+                        ctx.stroke();
+                        
+                        if (i % 2 === 0) {
+                            const value = i - FIELD_WIDTH / 2;
+                            ctx.textAlign = 'center';
+                            ctx.fillText(`${value}m`, x, canvasHeight / 2 + 20);
+                        }
+                    }
+                    
+                    // Vẽ vạch chia Y
+                    for (let i = 0; i <= FIELD_HEIGHT; i++) {
+                        const y = i * scaleY;
+                        ctx.beginPath();
+                        ctx.moveTo(canvasWidth / 2 - 5, y);
+                        ctx.lineTo(canvasWidth / 2 + 5, y);
+                        ctx.stroke();
+                        
+                        if (i % 2 === 0) {
+                            const value = FIELD_HEIGHT / 2 - i;
+                            ctx.textAlign = 'right';
+                            ctx.fillText(`${value}m`, canvasWidth / 2 - 10, y + 3);
+                        }
+                    }
+                    break;
+            }
+        }
+        
+        // Vẽ robot
+        function drawRobots() {
+            if (!ctx) return;
+            
+            // Vẽ vết đi trước
+            drawRobotTrails();
+            
+            // Vẽ robot sau
+            for (const robotName of ["R1", "R2"]) {
+                if (robotPositions[robotName].updated) {
+                    const {x, y} = transformCoordinates(
+                        robotPositions[robotName].x,
+                        robotPositions[robotName].y
+                    );
+                    
+                    // Vẽ vòng tròn của robot
+                    ctx.beginPath();
+                    ctx.arc(x, y, ROBOT_DIAMETER * scaleX / 2, 0, Math.PI * 2);
+                    ctx.fillStyle = robotPositions[robotName].color + '40'; // Màu có alpha
+                    ctx.fill();
+                    ctx.strokeStyle = robotPositions[robotName].color;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    
+                    // Vẽ điểm trung tâm
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = robotPositions[robotName].color;
+                    ctx.fill();
+                    
+                    // Thêm nhãn
+                    ctx.font = '12px Arial';
+                    ctx.fillStyle = '#000';
+                    ctx.fillText(robotName, x + 10, y - 10);
+                }
+            }
+        }
+
+        // Thêm hàm vẽ đường đi (trails)
+        function drawRobotTrails() {
+            if (!ctx) return;
+            
+            // Vẽ vết đi cho từng robot
+            for (const robotName of ["R1", "R2"]) {
+                const trail = robotTrails[robotName];
+                if (trail.length > 1) {
+                    ctx.beginPath();
+                    
+                    // Chuyển đổi điểm đầu tiên
+                    const startPoint = trail[0];
+                    const transformedStart = transformCoordinates(startPoint.x, startPoint.y);
+                    ctx.moveTo(transformedStart.x, transformedStart.y);
+                    
+                    // Vẽ các đoạn tiếp theo
+                    for (let i = 1; i < trail.length; i++) {
+                        const point = trail[i];
+                        const transformedPoint = transformCoordinates(point.x, point.y);
+                        ctx.lineTo(transformedPoint.x, transformedPoint.y);
+                    }
+                    
+                    ctx.strokeStyle = robotPositions[robotName].color + '80';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // Thêm hàm chuyển đổi tọa độ
+        function transformCoordinates(realX, realY) {
+            switch (coordinateOrigin) {
+                case "bottom-left":
+                    // Gốc ở góc dưới bên trái (0,0), X tăng sang phải, Y tăng lên trên
+                    return {
+                        x: realX * scaleX,
+                        y: canvasHeight - realY * scaleY
+                    };
+                    
+                case "bottom-right":
+                    // Gốc ở góc dưới bên phải (15,0), X tăng sang trái, Y tăng lên trên
+                    return {
+                        x: canvasWidth - realX * scaleX,
+                        y: canvasHeight - realY * scaleY
+                    };
+                    
+                case "center":
+                default:
+                    // Gốc ở tâm sân (7.5,4), X tăng sang phải, Y tăng lên trên
+                    return {
+                        x: canvasWidth / 2 + realX * scaleX,
+                        y: canvasHeight / 2 - realY * scaleY
+                    };
+            }
+        }
+
+        // Cập nhật vị trí robot
+        function updateMap() {
+            drawMap();
+            updateCoordinateDetails();
+        }
+        
+        // Mô phỏng dữ liệu vị trí (chỉ để test)
+        function startSimulation() {
+            // Chỉ bắt đầu mô phỏng nếu không có dữ liệu thực
+            if (hasRealData) return;
+            
+            let t = 0;
+            console.log("Starting position simulation");
+            
+            // Cập nhật IP address
+            document.getElementById('ip-address').textContent = window.location.hostname || '192.168.5.1';
+            
+            simulationInterval = setInterval(() => {
+                t += 0.02;
+                
+                // Tính toán vị trí mô phỏng cho R1
+                robotPositions.R1.x = 5 * Math.cos(t);
+                robotPositions.R1.y = 3 * Math.sin(t);
+                robotPositions.R1.updated = true;
+                
+                // Tính toán vị trí mô phỏng cho R2
+                robotPositions.R2.x = 4 * Math.cos(t + Math.PI);
+                robotPositions.R2.y = 2 * Math.sin(t + Math.PI);
+                robotPositions.R2.updated = true;
+                
+                // Cập nhật hiển thị vị trí
+                updatePositionDisplay('r1-position', robotPositions.R1.x, robotPositions.R1.y);
+                updatePositionDisplay('r2-position', robotPositions.R2.x, robotPositions.R2.y);
+                
+                // Vẽ lại bản đồ
+                updateMap();
+                
+            }, 50);
+        }
+
+        // Hàm tìm kiếm đệ quy các giá trị encoder trong đối tượng
+        function findEncoderValues(data, prefix = '') {
+            // Nếu không phải object, không cần tìm kiếm
+            if (typeof data !== 'object' || data === null) return null;
+            
+            const result = {};
+            let found = false;
+            
+            // Kiểm tra các trường tại level hiện tại
+            if (typeof data.encoderX !== 'undefined') {
+                result.x = parseFloat(data.encoderX);
+                found = true;
+            } else if (typeof data.x !== 'undefined') {
+                result.x = parseFloat(data.x);
+                found = true;
+            }
+            
+            if (typeof data.encoderY !== 'undefined') {
+                result.y = parseFloat(data.encoderY);
+                found = true;
+            } else if (typeof data.y !== 'undefined') {
+                result.y = parseFloat(data.y);
+                found = true;
+            }
+            
+            // Nếu không tìm thấy tại level hiện tại, tìm kiếm trong các thuộc tính con
+            if (!found) {
+                for (const key in data) {
+                    if (typeof data[key] === 'object' && data[key] !== null) {
+                        const nestedResult = findEncoderValues(data[key], prefix + key + '.');
+                        if (nestedResult) {
+                            return nestedResult; // Trả về ngay khi tìm thấy
+                        }
+                    }
+                }
+                return null; // Không tìm thấy giá trị encoder
+            }
+            
+            return result;
+        }
+
+        // Cập nhật hàm processRobotData để sử dụng tìm kiếm đệ quy
+        function processRobotData(data, robotName) {
+            // Đánh dấu đã nhận được dữ liệu thực
+            hasRealData = true;
+            
+            // Dừng mô phỏng nếu đang chạy
+            if (simulationInterval) {
+                console.log("Stopping simulation as real data received");
+                clearInterval(simulationInterval);
+                simulationInterval = null;
+            }
+            
+            // Tìm kiếm giá trị encoder trong dữ liệu
+            let encoderValues = findEncoderValues(data);
+            if (encoderValues) {
+                if (encoderValues.x !== undefined) {
+                    robotPositions[robotName].x = encoderValues.x;
+                    robotPositions[robotName].updated = true;
+                }
+                
+                if (encoderValues.y !== undefined) {
+                    robotPositions[robotName].y = encoderValues.y;
+                    robotPositions[robotName].updated = true;
+                }
+                
+                updatePositionDisplay(`${robotName.toLowerCase()}-position`, 
+                                     robotPositions[robotName].x, 
+                                     robotPositions[robotName].y);
+                
+                // Hiển thị thông tin debug
+                showDebugInfo({
+                    robot: robotName,
+                    topic: data.topic || 'unknown',
+                    position: { 
+                        x: robotPositions[robotName].x,
+                        y: robotPositions[robotName].y
+                    }
+                });
+            }
+        }
+
+        // Thêm hàm xử lý cập nhật tọa độ đơn lẻ
+        function updateSingleCoordinate(robotName, axis, value) {
+            if (value === undefined || value === null) {
+                console.warn(`Received undefined/null ${axis} value for ${robotName}`);
+                return;
+            }
+            
+            const parsedValue = parseFloat(value);
+            if (!isNaN(parsedValue)) {
+                console.log(`Updating ${robotName} ${axis} with value ${parsedValue}`);
+                robotPositions[robotName][axis] = parsedValue;
+                robotPositions[robotName].updated = true;
+                
+                // Thêm điểm vào vết đi nếu cả x và y đều đã được cập nhật
+                if (robotPositions[robotName].x !== undefined && 
+                    robotPositions[robotName].y !== undefined) {
+                    addTrailPoint(robotName, robotPositions[robotName].x, robotPositions[robotName].y);
+                }
+                
+                updatePositionDisplay(`${robotName.toLowerCase()}-position`, 
+                                     robotPositions[robotName].x, 
+                                     robotPositions[robotName].y);
+            } else {
+                console.warn(`Failed to parse ${axis} value '${value}' for ${robotName}`);
+            }
+        }
+
+        // Hàm hiển thị thông tin debug từ broker
+        function showDebugInfo(data) {
+            // Thêm phần tử hiển thị debug nếu chưa có
+            let debugElement = document.getElementById('mqtt-debug');
+            if (!debugElement) {
+                const mapContainer = document.querySelector('.map-container');
+                if (mapContainer) {
+                    // Tạo phần tử debug ẩn (có thể hiện lên khi cần)
+                    debugElement = document.createElement('div');
+                    debugElement.id = 'mqtt-debug';
+                    debugElement.style.display = 'none'; // Ẩn mặc định, thêm nút để hiển thị khi cần
+                    debugElement.style.backgroundColor = '#f0f0f0';
+                    debugElement.style.padding = '10px';
+                    debugElement.style.marginTop = '20px';
+                    debugElement.style.maxHeight = '200px';
+                    debugElement.style.overflow = 'auto';
+                    debugElement.style.fontFamily = 'monospace';
+                    debugElement.style.fontSize = '12px';
+                    
+                    // Tạo một nút để bật/tắt debug panel
+                    const debugButton = document.createElement('button');
+                    debugButton.textContent = 'Show/Hide Debug';
+                    debugButton.style.padding = '5px 10px';
+                    debugButton.style.marginTop = '10px';
+                    debugButton.style.cursor = 'pointer';
+                    debugButton.onclick = function() {
+                        debugElement.style.display = debugElement.style.display === 'none' ? 'block' : 'none';
+                    };
+                    
+                    mapContainer.appendChild(debugButton);
+                    mapContainer.appendChild(debugElement);
+                }
+            }
+            
+            if (debugElement) {
+                // Thêm thông tin mới vào đầu
+                const time = new Date().toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.innerHTML = `<strong>${time}</strong>: ${JSON.stringify(data)}`;
+                debugElement.insertBefore(entry, debugElement.firstChild);
+                
+                // Giới hạn số lượng mục
+                if (debugElement.childNodes.length > 20) {
+                    debugElement.removeChild(debugElement.lastChild);
+                }
+            }
+        }
+
+        // Hàm reset vết đi
+        function resetTrails() {
+            robotTrails.R1 = [];
+            robotTrails.R2 = [];
+            console.log("Trails reset");
+        }
+        
+        // Hàm căn chỉnh view về trung tâm
+        function centerView() {
+            // Nếu cần thêm tính năng zoom in/out và pan, hãy cập nhật hàm này
+            console.log("View centered");
+            drawMap();
+        }
+        
+        // Bật/tắt chế độ mô phỏng
+        function toggleSimulation() {
+            if (simulationInterval) {
+                clearInterval(simulationInterval);
+                simulationInterval = null;
+                document.getElementById('toggle-simulation-btn').textContent = "Start Simulation";
+                console.log("Simulation stopped");
+            } else {
+                startSimulation();
+                document.getElementById('toggle-simulation-btn').textContent = "Stop Simulation";
+                console.log("Simulation started");
+            }
+        }
+
+        // Thêm biến global để theo dõi gốc tọa độ:
+
+        // Cấu hình gốc tọa độ
+        let coordinateOrigin = "bottom-left"; // Có thể là: "bottom-left", "bottom-right", "center"
+        const MAX_TRAIL_POINTS = 100; // Giới hạn số điểm trong vết
+
+        // Thêm hàm chuyển đổi gốc tọa độ:
+        function changeOrigin(origin) {
+            coordinateOrigin = origin;
+            console.log(`Changed coordinate origin to: ${origin}`);
+            
+            // Cập nhật select box nếu được gọi từ code
+            const selectElement = document.getElementById('origin-select');
+            if (selectElement && selectElement.value !== origin) {
+                selectElement.value = origin;
+            }
+            
+            // Vẽ lại bản đồ và cập nhật thông tin
+            updateMap();
+            
+            // Lưu cấu hình
+            saveConfig();
+        }
+
+        // Thêm chức năng lưu/đọc cấu hình
+
+        // Hàm lưu cấu hình vào localStorage
+        function saveConfig() {
+            const config = {
+                origin: coordinateOrigin,
+                showTrails: true  // Thêm các cài đặt khác nếu cần
+            };
+            
+            try {
+                localStorage.setItem('mapConfig', JSON.stringify(config));
+                console.log('Configuration saved');
+            } catch (e) {
+                console.error('Failed to save configuration:', e);
+            }
+        }
+
+        // Hàm đọc cấu hình từ localStorage
+        function loadConfig() {
+            try {
+                const savedConfig = localStorage.getItem('mapConfig');
+                if (savedConfig) {
+                    const config = JSON.parse(savedConfig);
+                    
+                    // Áp dụng cấu hình đã lưu
+                    if (config.origin) {
+                        coordinateOrigin = config.origin;
+                        const selectElement = document.getElementById('origin-select');
+                        if (selectElement) {
+                            selectElement.value = config.origin;
+                        }
+                    }
+                    
+                    console.log('Configuration loaded');
+                }
+            } catch (e) {
+                console.error('Failed to load configuration:', e);
+            }
+        }
+
+        // Thêm vào phần khởi tạo để đọc cấu hình khi tải trang
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Map page loaded, initializing...');
+            
+            // Đọc cấu hình đã lưu
+            loadConfig();
+            
+            // Các khởi tạo khác...
+        });
+
+        // Thêm hàm cập nhật bảng tọa độ chi tiết
+        function updateCoordinateDetails() {
+            for (const robotName of ["R1", "R2"]) {
+                if (robotPositions[robotName].updated) {
+                    const realX = robotPositions[robotName].x;
+                    const realY = robotPositions[robotName].y;
+                    const {x, y} = transformCoordinates(realX, realY);
+                    
+                    const detailRow = document.getElementById(`${robotName.toLowerCase()}-coord-detail`);
+                    if (detailRow) {
+                        // Update the table cells
+                        detailRow.cells[1].textContent = realX.toFixed(2);
+                        detailRow.cells[2].textContent = realY.toFixed(2);
+                        detailRow.cells[3].textContent = Math.round(x);
+                        detailRow.cells[4].textContent = Math.round(y);
+                    }
+                }
+            }
+            
+            // Update the current origin display
+            const originDisplay = document.getElementById('current-origin');
+            if (originDisplay) {
+                switch(coordinateOrigin) {
+                    case "bottom-left":
+                        originDisplay.textContent = "Bottom Left (0,0)";
+                        break;
+                    case "bottom-right":
+                        originDisplay.textContent = "Bottom Right (15,0)";
+                        break;
+                    case "center":
+                        originDisplay.textContent = "Center (7.5,4)";
+                        break;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

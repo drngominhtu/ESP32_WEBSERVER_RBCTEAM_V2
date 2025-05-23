@@ -322,7 +322,7 @@ function updateGraph(chartId) {
             // THÊM KIỂM TRA GIỚI HẠN 10000 Ở ĐÂY
             if (!isNaN(numValue) && Math.abs(numValue) <= 10000) {
                 // Push new value - làm tròn đến 2 chữ số thập phân
-                const roundedValue = parseFloat(numValue.toFixed(2));
+                const roundedValue = parseFloat(numValue.toFixed(5));
                 dataset.data.push(roundedValue);
                 if (dataset.data.length > MAX_DATA_POINTS) {
                     dataset.data.shift();
