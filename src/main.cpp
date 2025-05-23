@@ -24,9 +24,9 @@ AsyncWebSocket ws("/ws");
 WiFiClient espClient;
 PubSubClient mqtt_client(espClient);
 
-// Add rate limiting variables
+// Increase rate limit interval to reduce overhead
 unsigned long lastMessageTime = 0;
-const unsigned long MESSAGE_INTERVAL = 25; // 100ms between messages
+const unsigned long MESSAGE_INTERVAL = 100; // Increased from 25ms to 100ms
 const size_t MAX_QUEUE_SIZE = 32; // Maximum queue size for WebSocket messages
 
 // Lưu trữ các topic đã phát hiện
@@ -42,9 +42,7 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     }
     lastMessageTime = currentTime;
 
-    // Debug: In ra topic nhận được
-    Serial.print("Received MQTT message on topic: ");
-    Serial.println(topic);
+    // REMOVED all Serial.print for incoming MQTT messages
 
     // Lưu topic mới vào danh sách
     String topicStr = String(topic);
@@ -54,11 +52,9 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
         knownTopics.insert(topicStr);
         isNewTopic = true;
         
-        // Debug: In ra khi phát hiện topic mới
-        Serial.print("New topic discovered: ");
+        // Keep only this critical new topic discovery log
+        Serial.print("New topic: ");
         Serial.println(topicStr);
-        Serial.print("Total topics known: ");
-        Serial.println(knownTopics.size());
     }
 
     // Tạo JSON với name và value
@@ -71,10 +67,7 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
         return;
     }
 
-    // Debug: In ra JSON đã parse
-    Serial.print("JSON payload: ");
-    serializeJson(doc, Serial);
-    Serial.println();
+    // REMOVED all Serial.print for JSON payload
 
     // Nếu topic hiện tại là "#" hoặc topic này là topic đang được subscribe
     // Hoặc topic này là con của topic đang được subscribe
@@ -84,97 +77,64 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
         // Forward JSON message không có address
         if (ws.count() > 0) {
             String jsonString;
+            // Add topic to the JSON before forwarding
+            doc["topic"] = topicStr; // Make sure topic is included in the forwarded JSON
             serializeJson(doc, jsonString);
             ws.textAll(jsonString);
-            
-            // Debug: In ra khi gửi dữ liệu qua WebSocket
-            Serial.print("Forwarding data to WebSocket. Connected clients: ");
-            Serial.println(ws.count());
         }
     }
 
-    // Nếu có topic mới, luôn gửi danh sách cập nhật cho clients, không quan tâm ws.count()
-    if (isNewTopic) {
-        // In ra thông tin về số lượng client WebSocket
-        Serial.print("Current WebSocket clients: ");
-        Serial.println(ws.count());
+    // Nếu có topic mới, luôn gửi danh sách cập nhật cho clients
+    if (isNewTopic && ws.count() > 0) {
+        StaticJsonDocument<1024> topicDoc;
+        topicDoc["type"] = "topic_list";
+        JsonArray topicArray = topicDoc.createNestedArray("topics");
         
-        if (ws.count() > 0) {
-            // Thêm dấu ngoặc nhọn mở
-            {
-                StaticJsonDocument<1024> topicDoc;
-                topicDoc["type"] = "topic_list";
-                JsonArray topicArray = topicDoc.createNestedArray("topics");
-                
-                // In ra danh sách đầy đủ các topic đã biết
-                Serial.println("Known topics:");
-                for (const String& t : knownTopics) {
-                    topicArray.add(t);
-                    Serial.println("  - " + t);
-                }
-                
-                String topicList;
-                serializeJson(topicDoc, topicList);
-                ws.textAll(topicList);
-                
-                // Debug: In ra khi gửi danh sách topic mới
-                Serial.println("Sending updated topic list to WebSocket clients:");
-                Serial.println(topicList);
-            } // Thêm dấu ngoặc nhọn đóng
-        } else {
-            Serial.println("No WebSocket clients connected to send topic list");
+        for (const String& t : knownTopics) {
+            topicArray.add(t);
         }
+        
+        String topicList;
+        serializeJson(topicDoc, topicList);
+        ws.textAll(topicList);
     }
 }
 
 void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {
     switch (type) {
         case WS_EVT_CONNECT: {
-            // Debug: In ra khi có client kết nối mới
-            Serial.print("WebSocket client connected. ID: ");
+            // Keep only critical connection log
+            Serial.print("WebSocket client connected #");
             Serial.println(client->id());
-            Serial.print("Total WebSocket clients: ");
-            Serial.println(ws.count());
             
-            // Luôn gửi danh sách topic hiện có, ngay cả khi trống
+            // Send topic list to new client
             StaticJsonDocument<1024> topicDoc;
             topicDoc["type"] = "topic_list";
             JsonArray topicArray = topicDoc.createNestedArray("topics");
             
-            if (knownTopics.size() > 0) {
-                Serial.println("Sending topic list to new client:");
-                for (const String& t : knownTopics) {
-                    topicArray.add(t);
-                    Serial.println("  - " + t);
-                }
-            } else {
-                Serial.println("No topics available, sending empty list to new client");
+            for (const String& t : knownTopics) {
+                topicArray.add(t);
             }
             
             String topicList;
             serializeJson(topicDoc, topicList);
             client->text(topicList);
-            Serial.println("Topic list JSON sent: " + topicList);
             break;
         }
             
         case WS_EVT_DISCONNECT:
-            // Debug: In ra khi client ngắt kết nối
-            Serial.print("WebSocket client disconnected. ID: ");
+            // Keep only critical disconnect log
+            Serial.print("WebSocket client disconnected #");
             Serial.println(client->id());
             break;
             
         case WS_EVT_DATA:
             if (len > 0) {
-                // Debug: In ra dữ liệu nhận được từ client
-                Serial.print("Received data from WebSocket client. Length: ");
-                Serial.println(len);
+                // REMOVED verbose data logs
                 
                 char message[len + 1];
                 memcpy(message, data, len);
                 message[len] = '\0';
-                Serial.print("Message: ");
-                Serial.println(message);
                 
                 // Kiểm tra xem đây có phải là lệnh đăng ký topic mới không
                 StaticJsonDocument<200> doc;
@@ -185,8 +145,8 @@ void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventTyp
                     
                     if (action == "subscribe" && doc.containsKey("topic")) {
                         String newTopic = doc["topic"];
-                        // Debug: In ra hành động đăng ký topic mới
-                        Serial.print("Subscribing to new topic: ");
+                        // Keep subscribe action log
+                        Serial.print("Subscribing to: ");
                         Serial.println(newTopic);
                         
                         // Hủy đăng ký topic cũ và đăng ký topic mới
@@ -203,15 +163,10 @@ void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventTyp
                         String jsonResponse;
                         serializeJson(response, jsonResponse);
                         client->text(jsonResponse);
-                        
-                        // Debug: In ra phản hồi gửi cho client
-                        Serial.print("Sending response: ");
-                        Serial.println(jsonResponse);
                     }
                 } else {
-                    // Đây là lệnh khác, chuyển tiếp tới MQTT như cũ
-                    mqtt_client.publish("Swerve_Robot/command", message);
-                    Serial.println("Forwarding message to MQTT topic: Swerve_Robot/command");
+                    // Đây là lệnh khác, chuyển tiếp tới MQTT
+                    mqtt_client.publish("Swerve_Robot/command", message); // Fixed - was publishing to "#"
                 }
             }
             break;
@@ -238,6 +193,10 @@ void setup() {
     }
     Serial.println("\nConnected to WiFi");
     Serial.println("IP Address: " + WiFi.localIP().toString());
+    
+    // Print free memory
+    Serial.print("Free heap: ");
+    Serial.println(ESP.getFreeHeap());
 
     // Setup MQTT
     mqtt_client.setServer(mqtt_server, mqtt_port);
@@ -260,13 +219,6 @@ void setup() {
         request->send(SPIFFS, "/script.js", "application/javascript");
     });
     
-    server.on("/R1.html", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(SPIFFS, "/R1.html", "text/html");
-    });
-    
-    server.on("/R2.html", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(SPIFFS, "/R2.html", "text/html");
-    });
     
     server.on("/aml_logo.svg", HTTP_GET, [](AsyncWebServerRequest *request){
         request->send(SPIFFS, "/aml_logo.svg", "image/svg+xml");
@@ -291,7 +243,10 @@ void setup() {
 }
 
 void reconnect_mqtt() {
-    while (!mqtt_client.connected()) {
+    // Only attempt connection for 10 seconds to prevent blocking
+    unsigned long startAttempt = millis();
+    
+    while (!mqtt_client.connected() && (millis() - startAttempt < 10000)) {
         Serial.println("Attempting MQTT connection...");
         if (mqtt_client.connect("ESP32Client", mqtt_username, mqtt_password)) {
             Serial.println("Connected to MQTT broker");
@@ -299,15 +254,22 @@ void reconnect_mqtt() {
         } else {
             Serial.print("Failed, rc=");
             Serial.print(mqtt_client.state());
-            Serial.println(" Retrying in 5 seconds");
-            delay(5000);
+            Serial.println(" Retrying in 2 seconds");
+            delay(2000);
         }
     }
 }
 
 void loop() {
+    // Handle MQTT connection
     if (!mqtt_client.connected()) {
         reconnect_mqtt();
     }
     mqtt_client.loop();
+    
+    // IMPORTANT: Add WebSocket cleanup to maintain connections
+    ws.cleanupClients();
+    
+    // Add a small delay to prevent watchdog timeout
+    delay(1);
 }

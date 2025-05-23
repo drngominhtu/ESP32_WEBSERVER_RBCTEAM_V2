@@ -38,7 +38,6 @@ function onConnect() {
 function onMessageArrived(message) {
     try {
         const data = JSON.parse(message.payloadString);
-        console.log('Received data:', data);
         updateWatchR1Values(data);
     } catch (error) {
         console.error('Error parsing message:', error);
@@ -767,41 +766,109 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 let websocket;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 function initWebSocket() {
-    console.log('Initializing WebSocket connection...');
-    websocket = new WebSocket(`ws://${window.location.hostname}/ws`);
-    websocket.onopen = onOpen;
-    websocket.onclose = onClose;
-    websocket.onmessage = onMessage;
+    // Remove console log
+    // console.log('Initializing WebSocket connection...');
+    
+    const host = window.location.hostname || '192.168.5.1';
+    const wsURL = `ws://${host}/ws`;
+    
+    // Show connecting status
+    document.getElementById('wifi-status').textContent = "Connecting...";
+    document.getElementById('wifi-status').className = "status connecting";
+    
+    try {
+        websocket = new WebSocket(wsURL);
+        
+        // Add connection timeout
+        const connectionTimeout = setTimeout(() => {
+            if (websocket.readyState !== WebSocket.OPEN) {
+                websocket.close();
+                handleConnectionError("Connection timeout");
+            }
+        }, 5000);
+        
+        websocket.onopen = function() {
+            // Remove console log
+            // console.log('WebSocket Connected!');
+            clearTimeout(connectionTimeout);
+            reconnectAttempts = 0;
+            
+            document.getElementById('wifi-status').textContent = "Connected";
+            document.getElementById('wifi-status').className = "status connected";
+            document.getElementById('ip-address').textContent = host;
+        };
+        
+        websocket.onclose = function() {
+            // Remove console log
+            // console.log('WebSocket Disconnected!');
+            document.getElementById('wifi-status').textContent = "Disconnected";
+            document.getElementById('wifi-status').className = "status disconnected";
+            
+            // Add exponential backoff for reconnection
+            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+                reconnectAttempts++;
+                setTimeout(initWebSocket, delay);
+            } else {
+                document.getElementById('wifi-status').textContent = "Connection Failed";
+                document.getElementById('wifi-status').className = "status error";
+            }
+        };
+        
+        websocket.onmessage = onMessage;
+        
+        websocket.onerror = function(error) {
+            handleConnectionError("WebSocket error");
+        };
+    } catch (error) {
+        handleConnectionError("Failed to create WebSocket connection");
+    }
 }
 
-function onOpen(event) {
-    console.log('WebSocket Connected!');
+function handleConnectionError(message) {
+    document.getElementById('wifi-status').textContent = "Error";
+    document.getElementById('wifi-status').className = "status error";
+    
+    // Display user-friendly error
+    const errorMessage = document.createElement('div');
+    errorMessage.className = "connection-error";
+    errorMessage.innerHTML = `
+        <div style="background-color: #ffebee; border-left: 4px solid #f44336; margin: 10px 0; padding: 10px; color: #333;">
+            <h3 style="margin-top: 0;">Connection Error</h3>
+            <p>${message}</p>
+            <p>Please check that:</p>
+            <ul>
+                <li>The ESP32 is powered on</li>
+                <li>You're connected to the same WiFi network as the ESP32</li>
+                <li>The ESP32 server is running properly</li>
+            </ul>
+            <button onclick="initWebSocket()">Try Again</button>
+            <button onclick="location.reload()">Refresh Page</button>
+        </div>
+    `;
+    
+    // Add to page
+    const container = document.querySelector('.graph');
+    if (container) {
+        if (!document.querySelector('.connection-error')) {
+            container.insertBefore(errorMessage, container.firstChild);
+        }
+    }
 }
-
-function onClose(event) {
-    console.log('WebSocket Disconnected!');
-    setTimeout(initWebSocket, 2000);
-}
-
-// Thêm sau khai báo WebSocket
-let knownTopics = []; // Lưu trữ các topic MQTT đã biết
-let currentSubscribedTopic = null; // Topic hiện tại đang được subscribe
 
 // Cải thiện hàm onMessage
 function onMessage(event) {
     try {
-        console.log('WebSocket message received:', event.data);
         const data = JSON.parse(event.data);
         
         // Kiểm tra loại tin nhắn topic_list
         if (data && data.type === 'topic_list') {
-            console.log('Received topic list:', data);
-            
             // Kiểm tra xem topics có phải là mảng và có dữ liệu không
             if (Array.isArray(data.topics)) {
-                console.log(`Found ${data.topics.length} topics in received data`);
                 knownTopics = data.topics;
                 populateTopicDropdown();
             } else {
@@ -811,15 +878,12 @@ function onMessage(event) {
         }
         
         if (data.type === 'subscribe_response') {
-            // Thông báo kết quả đăng ký topic
-            console.log(`Subscribed to topic: ${data.topic}`);
             currentSubscribedTopic = data.topic;
             updateConnectionStatus(`Connected to: ${data.topic}`);
             return;
         }
         
         // Xử lý dữ liệu bình thường
-        console.log('Processing data message:', data);
         const table = document.querySelector('.table1 tbody');
         if (!table) {
             console.error('Table not found');
@@ -1025,15 +1089,7 @@ function displayFullGraph(chartId) {
 
 // Kiểm tra kết nối WebSocket định kỳ
 setInterval(() => {
-    if (websocket && websocket.readyState === WebSocket.OPEN) {
-        console.log('WebSocket connection active');
-        // Có thể thêm code gửi ping nếu cần
-    } else if (websocket) {
-        console.error('WebSocket disconnected, state:', websocket.readyState);
-        // Kết nối lại nếu cần
-        initWebSocket();
-    } else {
-        console.error('WebSocket not initialized');
+    if (websocket && websocket.readyState !== WebSocket.OPEN) {
         initWebSocket();
     }
-}, 10000); // Kiểm tra mỗi 10 giây
+}, 10000);
