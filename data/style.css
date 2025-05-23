@@ -41,9 +41,12 @@ header {
     color: #ffffff;
 }
 
+/* Connection status styling */
 .status {
-    padding: 3px 8px;
+    font-weight: bold;
+    padding: 3px 6px;
     border-radius: 4px;
+    display: inline-block;
 }
 
 .status.connected {
@@ -52,7 +55,17 @@ header {
 }
 
 .status.disconnected {
-    background-color: #f44336;
+    background-color: #F44336;
+    color: white;
+}
+
+.status.connecting {
+    background-color: #FFC107;
+    color: black;
+}
+
+.status.error {
+    background-color: #9C27B0;
     color: white;
 }
 

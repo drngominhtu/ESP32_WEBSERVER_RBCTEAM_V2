@@ -105,15 +105,35 @@ function updateWatchR1Values(data) {
 //----------------------------------------------------------------------------------------------
 
 function updateConnectionStatus(status) {
-    let statusDiv = document.querySelector('.mqtt-status');
-    if (!statusDiv) {
-        statusDiv = document.createElement('div');
-        statusDiv.className = 'mqtt-status';
-        document.querySelector('.headpara').appendChild(statusDiv);
-    }
+    const statusElement = document.getElementById('wifi-status');
     
-    statusDiv.textContent = `MQTT: ${status}`;
-    statusDiv.className = `mqtt-status ${status.toLowerCase()}`;
+    if (!statusElement) return;
+    
+    // Update text and class based on status
+    statusElement.textContent = status;
+    
+    // Remove all status classes
+    statusElement.classList.remove('connected', 'disconnected', 'connecting', 'error');
+    
+    // Add appropriate class
+    switch(status.toLowerCase()) {
+        case 'connected':
+            statusElement.classList.add('connected');
+            break;
+        case 'disconnected':
+            statusElement.classList.add('disconnected');
+            break;
+        case 'connecting...':
+            statusElement.classList.add('connecting');
+            break;
+        case 'error':
+        case 'connection failed':
+            statusElement.classList.add('error');
+            break;
+        default:
+            // No class for unknown status
+            break;
+    }
 }
 
 function onConnectionLost(responseObject) {
@@ -766,274 +786,221 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 2000);
 });
 
+// WebSocket variables
 let websocket;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
+// Add this function to update the IP address display
+function updateIPAddress() {
+    // Get the current hostname or use default IP
+    const host = window.location.hostname || '192.168.5.1';
+    document.getElementById('ip-address').textContent = host;
+}
+
+// Enhanced connection status update function
+function updateConnectionStatus(status) {
+    const statusElement = document.getElementById('wifi-status');
+    
+    if (!statusElement) return;
+    
+    // Update text and class based on status
+    statusElement.textContent = status;
+    
+    // Remove all status classes
+    statusElement.classList.remove('connected', 'disconnected', 'connecting', 'error');
+    
+    // Add appropriate class
+    switch(status.toLowerCase()) {
+        case 'connected':
+            statusElement.classList.add('connected');
+            break;
+        case 'disconnected':
+            statusElement.classList.add('disconnected');
+            break;
+        case 'connecting...':
+            statusElement.classList.add('connecting');
+            break;
+        case 'error':
+        case 'connection failed':
+            statusElement.classList.add('error');
+            break;
+        default:
+            // No class for unknown status
+            break;
+    }
+}
+
+// Initialize WebSocket connection with better error handling
 function initWebSocket() {
-    console.log('Initializing WebSocket connection...');
-    websocket = new WebSocket(`ws://${window.location.hostname}/ws`);
-    websocket.onopen = onOpen;
-    websocket.onclose = onClose;
-    websocket.onmessage = onMessage;
+    try {
+        // Update status to connecting
+        updateConnectionStatus('Connecting...');
+        
+        // Get the current hostname or use default IP
+        const host = window.location.hostname || '192.168.5.1';
+        updateIPAddress(); // Update IP address display
+        
+        // Create WebSocket connection
+        websocket = new WebSocket(`ws://${host}/ws`);
+        
+        // Set a connection timeout
+        const connectionTimeout = setTimeout(() => {
+            if (websocket && websocket.readyState !== WebSocket.OPEN) {
+                websocket.close();
+                updateConnectionStatus('Connection Failed');
+                
+                // Try to reconnect after a delay
+                if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    reconnectAttempts++;
+                    setTimeout(initWebSocket, 3000);
+                }
+            }
+        }, 5000);
+        
+        // WebSocket open handler
+        websocket.onopen = function() {
+            clearTimeout(connectionTimeout);
+            reconnectAttempts = 0;
+            updateConnectionStatus('Connected');
+            
+            // Request the topic list from the server
+            requestTopicList();
+        };
+        
+        // WebSocket close handler
+        websocket.onclose = function() {
+            updateConnectionStatus('Disconnected');
+            
+            // Try to reconnect after a delay
+            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+                reconnectAttempts++;
+                setTimeout(initWebSocket, delay);
+            }
+        };
+        
+        // WebSocket message handler
+        websocket.onmessage = onMessage;
+        
+        // WebSocket error handler
+        websocket.onerror = function(error) {
+            clearTimeout(connectionTimeout);
+            updateConnectionStatus('Error');
+        };
+    } catch (error) {
+        updateConnectionStatus('Error');
+        console.error('WebSocket initialization error:', error);
+    }
 }
 
-function onOpen(event) {
-    console.log('WebSocket Connected!');
+// Request the list of available topics
+function requestTopicList() {
+    if (websocket && websocket.readyState === WebSocket.OPEN) {
+        websocket.send(JSON.stringify({
+            action: 'get_topics'
+        }));
+    }
 }
 
-function onClose(event) {
-    console.log('WebSocket Disconnected!');
-    setTimeout(initWebSocket, 2000);
+// Add connect/disconnect button functionality
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize WebSocket when page loads
+    updateIPAddress();
+    initWebSocket();
+    
+    // Connect button event listener
+    const connectButton = document.getElementById('connect-button');
+    if (connectButton) {
+        connectButton.addEventListener('click', function() {
+            const topicSelect = document.getElementById('topic');
+            if (topicSelect && topicSelect.value) {
+                subscribeToTopic(topicSelect.value);
+            } else {
+                alert('Please select a topic first');
+            }
+        });
+    }
+    
+    // Disconnect button event listener
+    const disconnectButton = document.getElementById('disconnect-button');
+    if (disconnectButton) {
+        disconnectButton.addEventListener('click', function() {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                // Subscribe to # (all topics) which effectively resets the subscription
+                subscribeToTopic('#');
+                updateConnectionStatus('Connected (All Topics)');
+            } else {
+                alert('WebSocket is not connected');
+            }
+        });
+    }
+});
+
+// Subscribe to a specific topic
+function subscribeToTopic(topic) {
+    if (websocket && websocket.readyState === WebSocket.OPEN) {
+        websocket.send(JSON.stringify({
+            action: 'subscribe',
+            topic: topic
+        }));
+        updateConnectionStatus(`Connected to ${topic}`);
+    } else {
+        updateConnectionStatus('Disconnected');
+        alert('WebSocket is not connected. Please refresh the page.');
+    }
 }
 
-// Thêm sau khai báo WebSocket
-let knownTopics = []; // Lưu trữ các topic MQTT đã biết
-let currentSubscribedTopic = null; // Topic hiện tại đang được subscribe
-
-// Cải thiện hàm onMessage
+// Process WebSocket messages
 function onMessage(event) {
     try {
-        console.log('WebSocket message received:', event.data);
         const data = JSON.parse(event.data);
         
-        // Kiểm tra loại tin nhắn topic_list
+        // Handle topic list response
         if (data && data.type === 'topic_list') {
-            console.log('Received topic list:', data);
-            
-            // Kiểm tra xem topics có phải là mảng và có dữ liệu không
             if (Array.isArray(data.topics)) {
-                console.log(`Found ${data.topics.length} topics in received data`);
-                knownTopics = data.topics;
-                populateTopicDropdown();
+                populateTopicDropdown(data.topics);
+            }
+            return;
+        }
+        
+        // Handle subscribe response
+        if (data && data.type === 'subscribe_response') {
+            if (data.status === 'success') {
+                updateConnectionStatus(`Connected to ${data.topic}`);
             } else {
-                console.error('Topics data is not an array or is missing', data);
+                updateConnectionStatus('Subscription failed');
             }
             return;
         }
         
-        if (data.type === 'subscribe_response') {
-            // Thông báo kết quả đăng ký topic
-            console.log(`Subscribed to topic: ${data.topic}`);
-            currentSubscribedTopic = data.topic;
-            updateConnectionStatus(`Connected to: ${data.topic}`);
-            return;
-        }
+        // Handle normal data messages
+        updateWatchR1Values(data);
         
-        // Xử lý dữ liệu bình thường
-        console.log('Processing data message:', data);
-        const table = document.querySelector('.table1 tbody');
-        if (!table) {
-            console.error('Table not found');
-            return;
-        }
-        
-        // Convert existing table rows to a map for quick lookup
-        const existingRows = new Map();
-        Array.from(table.rows).forEach(row => {
-            const key = row.cells[0].textContent.trim();
-            existingRows.set(key, row);
-        });
-
-        // Process each item from JSON data
-        Object.entries(data).forEach(([key, value]) => {
-            let row;
-            
-            // Check if row exists for this key
-            if (existingRows.has(key)) {
-                // Use existing row
-                row = existingRows.get(key);
-                existingRows.delete(key); // Remove from map to track unused rows
-            } else {
-                // Create new row if it doesn't exist
-                row = table.insertRow();
-                const cellName = row.insertCell(0);
-                const cellValue = row.insertCell(1); // Chỉ còn 2 cột
-                
-                cellName.textContent = key;
-            }
-
-            // Update value cell with formatting
-            const cellValue = row.cells[1];
-            const formattedValue = typeof value === 'number' ? 
-                value.toFixed(2) : value;
-
-            // Update and animate only if value changed
-            if (cellValue.textContent !== String(formattedValue)) {
-                cellValue.textContent = formattedValue;
-                cellValue.classList.remove('updated');
-                void cellValue.offsetWidth; // Force reflow
-                cellValue.classList.add('updated');
-            }
-        });
-
     } catch (error) {
-        console.error('Error processing WebSocket message:', error);
-        console.error('Raw message data:', event.data);
+        console.error('Error processing message:', error);
     }
 }
 
-// Cải thiện hàm populateTopicDropdown
-function populateTopicDropdown() {
+// Populate topic dropdown with available topics
+function populateTopicDropdown(topics) {
     const topicSelect = document.getElementById('topic');
-    if (!topicSelect) {
-        console.error('Topic dropdown element not found! ID: "topic"');
-        // Liệt kê tất cả các phần tử trong DOM để debug
-        console.log('All select elements in document:', document.querySelectorAll('select'));
-        return;
-    }
+    if (!topicSelect) return;
     
-    console.log('Populating topic dropdown with', knownTopics.length, 'topics');
-    
-    // Xóa các option hiện tại
+    // Clear existing options
     topicSelect.innerHTML = '';
     
-    // Thêm option mặc định (wildcard)
+    // Add default option
     const defaultOption = document.createElement('option');
-    defaultOption.value = '#';
-    defaultOption.textContent = 'All Topics (#)';
+    defaultOption.value = '';
+    defaultOption.textContent = 'Select a topic';
     topicSelect.appendChild(defaultOption);
     
-    // Thêm các topic đã biết
-    if (knownTopics.length > 0) {
-        knownTopics.forEach(topic => {
-            const option = document.createElement('option');
-            option.value = topic;
-            option.textContent = topic;
-            topicSelect.appendChild(option);
-            console.log('Added topic to dropdown:', topic);
-        });
-    } else {
-        console.log('No topics to add to dropdown');
-    }
-    
-    // Xác nhận số lượng option sau khi cập nhật
-    console.log('Dropdown now has', topicSelect.options.length, 'options');
-}
-
-// Thêm hàm để xử lý sự kiện nút Connect
-function setupTopicSelection() {
-    const connectButton = document.getElementById('connect-button');
-    const disconnectButton = document.getElementById('disconnect-button');
-    const topicSelect = document.getElementById('topic');
-    
-    if (!connectButton || !disconnectButton || !topicSelect) {
-        console.error('Topic selection controls not found!');
-        console.log('Connect button:', connectButton);
-        console.log('Disconnect button:', disconnectButton);
-        console.log('Topic select:', topicSelect);
-        return;
-    }
-    
-    console.log('Setting up topic selection event listeners');
-    
-    // Connect button
-    connectButton.addEventListener('click', () => {
-        const selectedTopic = topicSelect.value;
-        if (!selectedTopic) return;
-        
-        console.log('Connect button clicked. Selected topic:', selectedTopic);
-        
-        // Nếu websocket đã kết nối, gửi lệnh đăng ký topic
-        if (websocket && websocket.readyState === WebSocket.OPEN) {
-            const subscribeCommand = {
-                action: 'subscribe',
-                topic: selectedTopic
-            };
-            
-            websocket.send(JSON.stringify(subscribeCommand));
-            console.log(`Requesting subscription to: ${selectedTopic}`);
-        } else {
-            console.error('WebSocket not connected');
-            alert('WebSocket is not connected. Please wait or refresh the page.');
-        }
-    });
-    
-    // Disconnect button
-    disconnectButton.addEventListener('click', () => {
-        console.log('Disconnect button clicked');
-        
-        // Nếu đang được kết nối, quay về subscribe tất cả
-        if (websocket && websocket.readyState === WebSocket.OPEN) {
-            const subscribeCommand = {
-                action: 'subscribe',
-                topic: '#'
-            };
-            
-            websocket.send(JSON.stringify(subscribeCommand));
-            console.log('Disconnecting from specific topic, switching to all topics');
-        } else {
-            console.error('WebSocket not connected');
-        }
+    // Add all topics
+    topics.forEach(topic => {
+        const option = document.createElement('option');
+        option.value = topic;
+        option.textContent = topic;
+        topicSelect.appendChild(option);
     });
 }
-
-// Thêm hàm để hiển thị toàn bộ dữ liệu đã thu thập
-function displayFullGraph(chartId) {
-    console.log(`Attempting to display full graph for ${chartId}`);
-    const chart = charts[chartId];
-    if (!chart) {
-        console.error(`Chart ${chartId} not found`);
-        return;
-    }
-
-    // Kiểm tra xem có dữ liệu log không
-    if (!graphLogData[chartId]) {
-        console.error(`No graphLogData object for ${chartId}`);
-        return;
-    }
-    
-    if (!graphLogData[chartId].labels || graphLogData[chartId].labels.length === 0) {
-        console.error(`No labels data in graphLogData for ${chartId}`);
-        return;
-    }
-
-    // Log chi tiết về dữ liệu
-    console.log(`Graph log data for ${chartId}:`, graphLogData[chartId]);
-    console.log(`Number of data points: ${graphLogData[chartId].labels.length}`);
-
-    // Lấy dữ liệu log đã lưu từ Start đến Stop
-    const logData = graphLogData[chartId];
-    
-    // Cập nhật chế độ hiển thị
-    graphDisplayMode[chartId] = 'full';
-    
-    // Cập nhật đồ thị với tất cả dữ liệu
-    chart.data.labels = [...logData.labels]; // Sử dụng tất cả nhãn thời gian đã ghi
-    
-    // Cập nhật dữ liệu cho từng dataset
-    chart.data.datasets.forEach((dataset, index) => {
-        const valname = dataset.label;
-        if (logData.datasets[valname]) {
-            dataset.data = [...logData.datasets[valname]]; // Sử dụng tất cả dữ liệu đã ghi
-            console.log(`Updated dataset ${valname} with ${logData.datasets[valname].length} points`);
-        } else {
-            console.error(`No log data for dataset ${valname}`);
-        }
-    });
-    
-    // Cập nhật tùy chọn tỷ lệ để hiển thị đẹp hơn với nhiều dữ liệu
-    chart.options.scales.x = {
-        ticks: {
-            autoSkip: true,
-            maxTicksLimit: 20 // Giới hạn số lượng nhãn hiển thị trên trục x
-        }
-    };
-    
-    // Cập nhật đồ thị
-    chart.update();
-    console.log(`Displayed full graph for ${chartId} with ${logData.labels.length} data points`);
-}
-
-// Kiểm tra kết nối WebSocket định kỳ
-setInterval(() => {
-    if (websocket && websocket.readyState === WebSocket.OPEN) {
-        console.log('WebSocket connection active');
-        // Có thể thêm code gửi ping nếu cần
-    } else if (websocket) {
-        console.error('WebSocket disconnected, state:', websocket.readyState);
-        // Kết nối lại nếu cần
-        initWebSocket();
-    } else {
-        console.error('WebSocket not initialized');
-        initWebSocket();
-    }
-}, 10000); // Kiểm tra mỗi 10 giây
