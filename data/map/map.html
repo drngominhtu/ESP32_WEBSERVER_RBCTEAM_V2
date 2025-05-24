@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Position Map</title>
+    <link rel="stylesheet" href="stylemap.css">
+</head>
+<body>
+    <div class="map-container">
+        <div class="status-bar">
+            <div class="connection-info">
+                <p><span class="info-label">IP:</span> <span id="ip-address">--</span></p>
+                <p><span class="info-label">Status:</span> <span id="connection-status" class="status">Disconnected</span></p>
+            </div>
+            
+            <li onclick="location.href='../index.html'">Back to Home</li>
+            
+            <div class="position-info">
+                <p><span class="info-label">Position X:</span> <span id="position-x">0.00</span> m</p>
+                <p><span class="info-label">Position Y:</span> <span id="position-y">0.00</span> m</p>
+            </div>
+        </div>
+        
+        <div class="map-controls">
+            <button id="reset-btn">Reset Path</button>
+            <button id="center-btn">Center View</button>
+            <div class="scale-info">Scale: <span id="scale-value">1:1</span></div>
+        </div>
+        
+        <div class="map-view">
+            <canvas id="position-map"></canvas>
+            <div class="axes-labels">
+                <div class="x-axis-label">X (m)</div>
+                <div class="y-axis-label">Y (m)</div>
+            </div>
+            <div class="dimensions-label">15m x 8m</div>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #FF5733;"></div>
+                <div class="legend-text">Current Position</div>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #3498DB; opacity: 0.5;"></div>
+                <div class="legend-text">Path History</div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="scriptmap.js"></script>
+</body>
+</html>
