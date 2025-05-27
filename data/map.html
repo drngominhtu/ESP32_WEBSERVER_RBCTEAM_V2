@@ -44,6 +44,11 @@
             
             <div class="map-controls">
                 <h2>Controls</h2>
+                <div class="record-controls">
+                    <button id="start-record-btn" class="btn">Start Record</button>
+                    <button id="stop-record-btn" class="btn btn-secondary" disabled>Stop Record</button>
+                    <button id="export-path-btn" class="btn btn-export">Export Path</button>
+                </div>
                 <button id="reset-btn" class="btn">Reset Path</button>
                 <button id="center-btn" class="btn">Center View</button>
                 <div class="zoom-controls">
@@ -56,6 +61,11 @@
                 <h2>Path Information</h2>
                 <p><span class="info-label">Points:</span> <span id="path-points">0</span></p>
                 <p><span class="info-label">Distance:</span> <span id="total-distance">0.00</span> m</p>
+            </div>
+            
+            <div class="recording-status inactive">
+                <span class="recording-indicator"></span>
+                <span class="recording-text">Ready</span>
             </div>
         </div>
         

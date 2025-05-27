@@ -33,6 +33,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('zoom-in-btn').addEventListener('click', () => changeZoom(1.2));
     document.getElementById('zoom-out-btn').addEventListener('click', () => changeZoom(0.8));
     
+    // Thêm sự kiện cho các nút record
+    document.getElementById('start-record-btn').addEventListener('click', startRecording);
+    document.getElementById('stop-record-btn').addEventListener('click', stopRecording);
+    document.getElementById('export-path-btn').addEventListener('click', exportPath);
+    
     // Cập nhật IP từ nguồn hiện tại
     document.getElementById('ip-address').textContent = window.location.hostname;
     updateConnectionStatus('Connected');
@@ -163,37 +168,36 @@ function processPositionData(data) {
         
         console.log(`Map: Sau khi parse - X=${newX}, Y=${newY}`);
         
-        // Chỉ xử lý giá trị hợp lệ và nằm trong giới hạn
+        // Cập nhật vị trí robot luôn được thực hiện để hiển thị vị trí hiện tại
         if (!isNaN(newX) && !isNaN(newY) && Math.abs(newX) < 10000 && Math.abs(newY) < 10000) {
-            // Tính khoảng cách từ vị trí trước đó
-            if (pathHistory.length > 0) {
-                const lastPos = pathHistory[pathHistory.length - 1];
-                const dist = calculateDistance(lastPos.x, lastPos.y, newX, newY);
-                
-                // Cập nhật tổng khoảng cách chỉ khi vị trí thực sự thay đổi
-                if (dist > 0.01) { // Bỏ qua thay đổi nhỏ để tránh tích lũy nhiễu
-                    totalDistance += dist;
-                    document.getElementById('total-distance').textContent = totalDistance.toFixed(2);
+            robotPosition.x = newX;
+            robotPosition.y = newY;
+            
+            // Cập nhật hiển thị vị trí
+            updatePositionDisplay(newX, newY);
+            
+            // Chỉ cập nhật lịch sử đường đi nếu đang ghi
+            if (isRecording) {
+                if (pathHistory.length > 0) {
+                    const lastPos = pathHistory[pathHistory.length - 1];
+                    const dist = calculateDistance(lastPos.x, lastPos.y, newX, newY);
                     
-                    // Cập nhật vị trí và thêm vào lịch sử
-                    robotPosition.x = newX;
-                    robotPosition.y = newY;
+                    // Cập nhật tổng khoảng cách chỉ khi vị trí thực sự thay đổi
+                    if (dist > 0.01) { // Bỏ qua thay đổi nhỏ để tránh tích lũy nhiễu
+                        totalDistance += dist;
+                        document.getElementById('total-distance').textContent = totalDistance.toFixed(2);
+                        
+                        // Thêm vào lịch sử
+                        addToPathHistory(newX, newY);
+                    }
+                } else {
+                    // Điểm đầu tiên
                     addToPathHistory(newX, newY);
-                    
-                    // Cập nhật hiển thị vị trí
-                    updatePositionDisplay(newX, newY);
-                    
-                    // Vẽ lại bản đồ
-                    drawMap();
                 }
-            } else {
-                // Điểm đầu tiên
-                robotPosition.x = newX;
-                robotPosition.y = newY;
-                addToPathHistory(newX, newY);
-                updatePositionDisplay(newX, newY);
-                drawMap();
             }
+            
+            // Vẽ lại bản đồ
+            drawMap();
         } else {
             console.log(`Map: Giá trị không hợp lệ hoặc vượt quá giới hạn - X=${newX}, Y=${newY}`);
         }
@@ -463,11 +467,22 @@ function drawRobotPosition(fieldX, fieldY) {
 
 // Xóa lịch sử đường đi
 function resetPath() {
+    // Thêm xác nhận trước khi xóa
+    if (pathHistory.length > 0) {
+        const confirmReset = confirm('Are you sure you want to reset the path? This action cannot be undone.');
+        if (!confirmReset) return;
+    }
+    
     pathHistory = [];
     totalDistance = 0;
     document.getElementById('path-points').textContent = '0';
     document.getElementById('total-distance').textContent = '0.00';
     drawMap();
+    
+    // Cập nhật trạng thái ghi
+    if (isRecording) {
+        stopRecording();
+    }
 }
 
 // Căn giữa khung nhìn
@@ -477,4 +492,231 @@ function centerView() {
     zoomLevel = 1;
     updateScale();
     drawMap();
+}
+
+// Thêm các hàm điều khiển ghi
+let isRecording = false;
+
+function startRecording() {
+    // Chỉ bắt đầu ghi nếu chưa ghi
+    if (!isRecording) {
+        isRecording = true;
+        
+        // Cập nhật UI
+        document.getElementById('start-record-btn').disabled = true;
+        document.getElementById('stop-record-btn').disabled = false;
+        
+        // Cập nhật chỉ báo trạng thái ghi
+        const statusElement = document.querySelector('.recording-status');
+        statusElement.classList.remove('inactive');
+        statusElement.classList.add('active');
+        statusElement.querySelector('.recording-text').textContent = 'Recording';
+        
+        console.log('Map: Recording started');
+    }
+}
+
+function stopRecording() {
+    // Chỉ dừng ghi nếu đang ghi
+    if (isRecording) {
+        isRecording = false;
+        
+        // Cập nhật UI
+        document.getElementById('start-record-btn').disabled = false;
+        document.getElementById('stop-record-btn').disabled = true;
+        
+        // Cập nhật chỉ báo trạng thái ghi
+        const statusElement = document.querySelector('.recording-status');
+        statusElement.classList.remove('active');
+        statusElement.classList.add('inactive');
+        statusElement.querySelector('.recording-text').textContent = 'Stopped';
+        
+        console.log('Map: Recording stopped');
+    }
+}
+
+// Thêm hàm xuất ảnh từ canvas
+function exportImage() {
+    try {
+        // Vẽ lại bản đồ với chất lượng cao
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = mapCanvas.width * 2; // Kích thước gấp đôi để chất lượng cao
+        tempCanvas.height = mapCanvas.height * 2;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        // Áp dụng các transform tương tự như canvas gốc
+        tempCtx.scale(2, 2); // Tăng độ phân giải
+        tempCtx.translate(canvasWidth / 2 + offsetX, canvasHeight / 2 + offsetY);
+        tempCtx.scale(zoomLevel, zoomLevel);
+        tempCtx.translate(-canvasWidth / 2, -canvasHeight / 2);
+        
+        // Vẽ lại bản đồ trên canvas tạm
+        // Tính toán kích thước và vị trí của hình chữ nhật
+        const fieldPixelWidth = FIELD_WIDTH * (canvasWidth / FIELD_WIDTH);
+        const fieldPixelHeight = FIELD_HEIGHT * (canvasHeight / FIELD_HEIGHT);
+        const fieldX = (canvasWidth - fieldPixelWidth) / 2;
+        const fieldY = (canvasHeight - fieldPixelHeight) / 2;
+        
+        // Vẽ nền
+        tempCtx.fillStyle = '#f0f0f0';
+        tempCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+        
+        // Vẽ khung
+        tempCtx.strokeStyle = '#333';
+        tempCtx.lineWidth = 2;
+        tempCtx.strokeRect(fieldX, fieldY, fieldPixelWidth, fieldPixelHeight);
+        
+        // Vẽ lưới
+        const gridSize = 1; // 1 mét
+        const pixelsPerMeterX = fieldWidth / FIELD_WIDTH;
+        const pixelsPerMeterY = fieldHeight / FIELD_HEIGHT;
+        
+        tempCtx.strokeStyle = '#ddd';
+        tempCtx.lineWidth = 0.5;
+        
+        // Vẽ lưới dọc và ngang
+        for (let x = 0; x <= FIELD_WIDTH; x += gridSize) {
+            const pixelX = fieldX + x * pixelsPerMeterX;
+            tempCtx.beginPath();
+            tempCtx.moveTo(pixelX, fieldY);
+            tempCtx.lineTo(pixelX, fieldY + fieldPixelHeight);
+            tempCtx.stroke();
+        }
+        
+        for (let y = 0; y <= FIELD_HEIGHT; y += gridSize) {
+            const pixelY = fieldY + y * pixelsPerMeterY;
+            tempCtx.beginPath();
+            tempCtx.moveTo(fieldX, pixelY);
+            tempCtx.lineTo(fieldX + fieldPixelWidth, pixelY);
+            tempCtx.stroke();
+        }
+        
+        // Vẽ đường đi
+        if (pathHistory.length >= 2) {
+            const pixelsPerMeterX = (canvasWidth / FIELD_WIDTH);
+            const pixelsPerMeterY = (canvasHeight / FIELD_HEIGHT);
+            
+            tempCtx.strokeStyle = '#3498DB';
+            tempCtx.lineWidth = 2;
+            tempCtx.beginPath();
+            
+            // Điểm đầu tiên
+            const startX = fieldX + pathHistory[0].x * pixelsPerMeterX;
+            const startY = fieldY + (FIELD_HEIGHT - pathHistory[0].y) * pixelsPerMeterY;
+            tempCtx.moveTo(startX, startY);
+            
+            // Vẽ đường nối các điểm
+            for (let i = 1; i < pathHistory.length; i++) {
+                const x = fieldX + pathHistory[i].x * pixelsPerMeterX;
+                const y = fieldY + (FIELD_HEIGHT - pathHistory[i].y) * pixelsPerMeterY;
+                tempCtx.lineTo(x, y);
+            }
+            
+            tempCtx.stroke();
+        }
+        
+        // Vẽ vị trí robot
+        const robotX = fieldX + robotPosition.x * pixelsPerMeterX;
+        const robotY = fieldY + (FIELD_HEIGHT - robotPosition.y) * pixelsPerMeterY;
+        const radiusPixels = ROBOT_RADIUS * pixelsPerMeterX;
+        
+        tempCtx.fillStyle = '#FF5733';
+        tempCtx.beginPath();
+        tempCtx.arc(robotX, robotY, radiusPixels, 0, Math.PI * 2);
+        tempCtx.fill();
+        
+        // Thêm chú thích
+        tempCtx.fillStyle = '#333';
+        tempCtx.font = '14px Arial';
+        tempCtx.fillText(`Total Distance: ${totalDistance.toFixed(2)}m`, 10, 20);
+        tempCtx.fillText(`Points: ${pathHistory.length}`, 10, 40);
+        tempCtx.fillText(`Topic: ${currentSelectedTopic || 'ALL'}`, 10, 60);
+        tempCtx.fillText(`Generated: ${new Date().toLocaleString()}`, 10, 80);
+        
+        // Tạo URL cho hình ảnh
+        const imageURL = tempCanvas.toDataURL('image/png');
+        
+        // Tạo thẻ a để tải xuống
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = imageURL;
+        a.download = `robot_path_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+        
+        document.body.appendChild(a);
+        a.click();
+        
+        // Cleanup
+        window.setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(imageURL);
+        }, 100);
+        
+        console.log('Map: Image exported successfully');
+    } catch (error) {
+        console.error('Map: Error exporting image', error);
+        alert('Failed to export image: ' + error.message);
+    }
+}
+
+// Sửa đổi hàm export để hỗ trợ cả JSON và PNG
+function exportPath() {
+    // Chỉ xuất nếu có dữ liệu
+    if (pathHistory.length === 0) {
+        alert('No path data to export.');
+        return;
+    }
+    
+    // Hỏi người dùng muốn xuất loại file nào
+    const exportType = confirm(
+        'Choose export format:\nOK - Export as Image (PNG)\nCancel - Export as Data (JSON)'
+    );
+    
+    if (exportType) {
+        // Xuất PNG
+        exportImage();
+    } else {
+        // Xuất JSON
+        exportPathAsJSON();
+    }
+}
+
+function exportPathAsJSON() {
+    try {
+        // Tạo đối tượng dữ liệu xuất
+        const exportData = {
+            timestamp: new Date().toISOString(),
+            topic: currentSelectedTopic || 'ALL',
+            totalDistance: totalDistance,
+            points: pathHistory.length,
+            path: pathHistory
+        };
+        
+        // Chuyển đổi đối tượng thành chuỗi JSON
+        const jsonString = JSON.stringify(exportData, null, 2);
+        
+        // Tạo Blob và URL
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        // Tạo thẻ a để tải xuống
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `robot_path_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+        
+        // Thêm vào DOM, trigger click, và xóa
+        document.body.appendChild(a);
+        a.click();
+        
+        // Cleanup
+        window.setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+        
+        console.log('Map: Path data exported successfully');
+    } catch (error) {
+        console.error('Map: Error exporting path data', error);
+        alert('Failed to export path data: ' + error.message);
+    }
 }
