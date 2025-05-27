@@ -367,6 +367,11 @@ function drawMap() {
     
     // Khôi phục trạng thái
     mapCtx.restore();
+    
+    // Thêm thông báo về hệ toạ độ
+    mapCtx.fillStyle = '#333';
+    mapCtx.font = 'italic 10px Arial';
+    mapCtx.fillText('*Gốc toạ độ (0,0) ở góc dưới bên phải', fieldX + 5, fieldY + 15);
 }
 
 // Vẽ lưới
@@ -375,10 +380,11 @@ function drawGrid(fieldX, fieldY, fieldWidth, fieldHeight) {
     const pixelsPerMeterX = fieldWidth / FIELD_WIDTH;
     const pixelsPerMeterY = fieldHeight / FIELD_HEIGHT;
     
+    // Vẽ lưới thường (mỏng)
     mapCtx.strokeStyle = '#ddd';
     mapCtx.lineWidth = 0.5;
     
-    // Vẽ lưới dọc
+    // Vẽ lưới dọc - với nhãn đảo ngược
     for (let x = 0; x <= FIELD_WIDTH; x += gridSize) {
         const pixelX = fieldX + x * pixelsPerMeterX;
         
@@ -387,15 +393,16 @@ function drawGrid(fieldX, fieldY, fieldWidth, fieldHeight) {
         mapCtx.lineTo(pixelX, fieldY + fieldHeight);
         mapCtx.stroke();
         
-        // Vẽ nhãn trục X
+        // Vẽ nhãn trục X - đảo ngược giá trị
         if (x % 5 === 0 || x === FIELD_WIDTH) {
             mapCtx.fillStyle = '#666';
             mapCtx.font = '10px Arial';
-            mapCtx.fillText(`${x}m`, pixelX + 2, fieldY + fieldHeight - 2);
+            // Hiển thị giá trị đảo ngược (FIELD_WIDTH - x)
+            mapCtx.fillText(`${FIELD_WIDTH - x}m`, pixelX + 2, fieldY + fieldHeight - 2);
         }
     }
     
-    // Vẽ lưới ngang
+    // Vẽ lưới ngang - không thay đổi
     for (let y = 0; y <= FIELD_HEIGHT; y += gridSize) {
         const pixelY = fieldY + y * pixelsPerMeterY;
         
@@ -411,6 +418,30 @@ function drawGrid(fieldX, fieldY, fieldWidth, fieldHeight) {
             mapCtx.fillText(`${y}m`, fieldX + 2, pixelY - 2);
         }
     }
+    
+    // Vẽ đường trục chính giữa (đậm hơn và màu khác)
+    mapCtx.strokeStyle = '#7b1fa2'; // Màu tím phù hợp với theme
+    mapCtx.lineWidth = 1.5;
+    
+    // Đường dọc chính giữa (tại X = FIELD_WIDTH/2)
+    const centerX = fieldX + (FIELD_WIDTH / 2) * pixelsPerMeterX;
+    mapCtx.beginPath();
+    mapCtx.moveTo(centerX, fieldY);
+    mapCtx.lineTo(centerX, fieldY + fieldHeight);
+    mapCtx.stroke();
+    
+    // Đường ngang chính giữa (tại Y = FIELD_HEIGHT/2)
+    const centerY = fieldY + (FIELD_HEIGHT / 2) * pixelsPerMeterY;
+    mapCtx.beginPath();
+    mapCtx.moveTo(fieldX, centerY);
+    mapCtx.lineTo(fieldX + fieldWidth, centerY);
+    mapCtx.stroke();
+    
+    // Thêm nhãn cho đường chính giữa - điều chỉnh giá trị X
+    mapCtx.fillStyle = '#7b1fa2';
+    mapCtx.font = 'bold 10px Arial';
+    mapCtx.fillText(`Giữa (${FIELD_WIDTH/2}m)`, centerX + 3, fieldY + 12);
+    mapCtx.fillText(`Giữa (${FIELD_HEIGHT/2}m)`, fieldX + 3, centerY - 5);
 }
 
 // Vẽ lịch sử đường đi
@@ -424,14 +455,15 @@ function drawPathHistory(fieldX, fieldY) {
     mapCtx.lineWidth = 2;
     mapCtx.beginPath();
     
-    // Điểm đầu tiên
-    const startX = fieldX + pathHistory[0].x * pixelsPerMeterX;
+    // Điểm đầu tiên - chuyển đổi toạ độ X
+    const startX = fieldX + (FIELD_WIDTH - pathHistory[0].x) * pixelsPerMeterX;
     const startY = fieldY + (FIELD_HEIGHT - pathHistory[0].y) * pixelsPerMeterY;
     mapCtx.moveTo(startX, startY);
     
     // Vẽ đường nối các điểm
     for (let i = 1; i < pathHistory.length; i++) {
-        const x = fieldX + pathHistory[i].x * pixelsPerMeterX;
+        // Chuyển đổi toạ độ X
+        const x = fieldX + (FIELD_WIDTH - pathHistory[i].x) * pixelsPerMeterX;
         const y = fieldY + (FIELD_HEIGHT - pathHistory[i].y) * pixelsPerMeterY;
         mapCtx.lineTo(x, y);
     }
@@ -444,7 +476,8 @@ function drawRobotPosition(fieldX, fieldY) {
     const pixelsPerMeterX = (canvasWidth / FIELD_WIDTH);
     const pixelsPerMeterY = (canvasHeight / FIELD_HEIGHT);
     
-    const robotX = fieldX + robotPosition.x * pixelsPerMeterX;
+    // Thay đổi cách tính toạ độ X - lấy từ bên phải
+    const robotX = fieldX + (FIELD_WIDTH - robotPosition.x) * pixelsPerMeterX;
     const robotY = fieldY + (FIELD_HEIGHT - robotPosition.y) * pixelsPerMeterY;
     const radiusPixels = ROBOT_RADIUS * pixelsPerMeterX;
     

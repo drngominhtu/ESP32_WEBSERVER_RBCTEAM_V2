@@ -283,6 +283,13 @@ h2 {
     animation: none;
 }
 
+.coordinate-info {
+    font-size: 0.8em;
+    font-style: italic;
+    color: #666;
+    margin-top: 5px;
+}
+
 @media (max-width: 768px) {
     .container {
         flex-direction: column;
