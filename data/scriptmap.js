@@ -583,8 +583,7 @@ function exportImage() {
         tempCtx.scale(zoomLevel, zoomLevel);
         tempCtx.translate(-canvasWidth / 2, -canvasHeight / 2);
         
-        // Vẽ lại bản đồ trên canvas tạm
-        // Tính toán kích thước và vị trí của hình chữ nhật
+        // Tính toán kích thước và vị trí của hình chữ nhật - SỬA PHẦN NÀY
         const fieldPixelWidth = FIELD_WIDTH * (canvasWidth / FIELD_WIDTH);
         const fieldPixelHeight = FIELD_HEIGHT * (canvasHeight / FIELD_HEIGHT);
         const fieldX = (canvasWidth - fieldPixelWidth) / 2;
@@ -599,21 +598,29 @@ function exportImage() {
         tempCtx.lineWidth = 2;
         tempCtx.strokeRect(fieldX, fieldY, fieldPixelWidth, fieldPixelHeight);
         
-        // Vẽ lưới
+        // Vẽ lưới - SỬA PHẦN NÀY
         const gridSize = 1; // 1 mét
-        const pixelsPerMeterX = fieldWidth / FIELD_WIDTH;
-        const pixelsPerMeterY = fieldHeight / FIELD_HEIGHT;
+        const pixelsPerMeterX = fieldPixelWidth / FIELD_WIDTH;
+        const pixelsPerMeterY = fieldPixelHeight / FIELD_HEIGHT;
         
         tempCtx.strokeStyle = '#ddd';
         tempCtx.lineWidth = 0.5;
         
-        // Vẽ lưới dọc và ngang
+        // Vẽ lưới dọc và ngang - đảo ngược nhãn X
         for (let x = 0; x <= FIELD_WIDTH; x += gridSize) {
             const pixelX = fieldX + x * pixelsPerMeterX;
             tempCtx.beginPath();
             tempCtx.moveTo(pixelX, fieldY);
             tempCtx.lineTo(pixelX, fieldY + fieldPixelHeight);
             tempCtx.stroke();
+            
+            // Thêm nhãn cho trục X
+            if (x % 5 === 0 || x === FIELD_WIDTH) {
+                tempCtx.fillStyle = '#666';
+                tempCtx.font = '10px Arial';
+                // Hiển thị giá trị đảo ngược (FIELD_WIDTH - x)
+                tempCtx.fillText(`${FIELD_WIDTH - x}m`, pixelX + 2, fieldY + fieldPixelHeight - 2);
+            }
         }
         
         for (let y = 0; y <= FIELD_HEIGHT; y += gridSize) {
@@ -622,25 +629,48 @@ function exportImage() {
             tempCtx.moveTo(fieldX, pixelY);
             tempCtx.lineTo(fieldX + fieldPixelWidth, pixelY);
             tempCtx.stroke();
+            
+            // Thêm nhãn cho trục Y
+            if (y % 5 === 0 || y === FIELD_HEIGHT) {
+                tempCtx.fillStyle = '#666';
+                tempCtx.font = '10px Arial';
+                tempCtx.fillText(`${y}m`, fieldX + 2, pixelY - 2);
+            }
         }
+        
+        // Vẽ đường trục chính giữa
+        tempCtx.strokeStyle = '#7b1fa2'; // Màu tím phù hợp với theme
+        tempCtx.lineWidth = 1.5;
+        
+        // Đường dọc chính giữa
+        const centerX = fieldX + (FIELD_WIDTH / 2) * pixelsPerMeterX;
+        tempCtx.beginPath();
+        tempCtx.moveTo(centerX, fieldY);
+        tempCtx.lineTo(centerX, fieldY + fieldPixelHeight);
+        tempCtx.stroke();
+        
+        // Đường ngang chính giữa
+        const centerY = fieldY + (FIELD_HEIGHT / 2) * pixelsPerMeterY;
+        tempCtx.beginPath();
+        tempCtx.moveTo(fieldX, centerY);
+        tempCtx.lineTo(fieldX + fieldPixelWidth, centerY);
+        tempCtx.stroke();
         
         // Vẽ đường đi
         if (pathHistory.length >= 2) {
-            const pixelsPerMeterX = (canvasWidth / FIELD_WIDTH);
-            const pixelsPerMeterY = (canvasHeight / FIELD_HEIGHT);
-            
             tempCtx.strokeStyle = '#3498DB';
             tempCtx.lineWidth = 2;
             tempCtx.beginPath();
             
-            // Điểm đầu tiên
-            const startX = fieldX + pathHistory[0].x * pixelsPerMeterX;
+            // Điểm đầu tiên - sửa cách tính toán
+            const startX = fieldX + (FIELD_WIDTH - pathHistory[0].x) * pixelsPerMeterX;
             const startY = fieldY + (FIELD_HEIGHT - pathHistory[0].y) * pixelsPerMeterY;
             tempCtx.moveTo(startX, startY);
             
             // Vẽ đường nối các điểm
             for (let i = 1; i < pathHistory.length; i++) {
-                const x = fieldX + pathHistory[i].x * pixelsPerMeterX;
+                // Sửa cách tính toán tọa độ cho phù hợp với hệ toạ độ mới
+                const x = fieldX + (FIELD_WIDTH - pathHistory[i].x) * pixelsPerMeterX;
                 const y = fieldY + (FIELD_HEIGHT - pathHistory[i].y) * pixelsPerMeterY;
                 tempCtx.lineTo(x, y);
             }
@@ -648,8 +678,8 @@ function exportImage() {
             tempCtx.stroke();
         }
         
-        // Vẽ vị trí robot
-        const robotX = fieldX + robotPosition.x * pixelsPerMeterX;
+        // Vẽ vị trí robot - sửa cách tính toán
+        const robotX = fieldX + (FIELD_WIDTH - robotPosition.x) * pixelsPerMeterX;
         const robotY = fieldY + (FIELD_HEIGHT - robotPosition.y) * pixelsPerMeterY;
         const radiusPixels = ROBOT_RADIUS * pixelsPerMeterX;
         
@@ -658,6 +688,16 @@ function exportImage() {
         tempCtx.arc(robotX, robotY, radiusPixels, 0, Math.PI * 2);
         tempCtx.fill();
         
+        // Vẽ dấu cộng tại tâm
+        tempCtx.strokeStyle = '#fff';
+        tempCtx.lineWidth = 2;
+        tempCtx.beginPath();
+        tempCtx.moveTo(robotX - 5, robotY);
+        tempCtx.lineTo(robotX + 5, robotY);
+        tempCtx.moveTo(robotX, robotY - 5);
+        tempCtx.lineTo(robotX, robotY + 5);
+        tempCtx.stroke();
+        
         // Thêm chú thích
         tempCtx.fillStyle = '#333';
         tempCtx.font = '14px Arial';
@@ -665,6 +705,7 @@ function exportImage() {
         tempCtx.fillText(`Points: ${pathHistory.length}`, 10, 40);
         tempCtx.fillText(`Topic: ${currentSelectedTopic || 'ALL'}`, 10, 60);
         tempCtx.fillText(`Generated: ${new Date().toLocaleString()}`, 10, 80);
+        tempCtx.fillText(`*Gốc toạ độ (0,0) ở góc dưới bên phải`, 10, 100);
         
         // Tạo URL cho hình ảnh
         const imageURL = tempCanvas.toDataURL('image/png');
