@@ -42,10 +42,6 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     }
     lastMessageTime = currentTime;
 
-    // Debug: In ra topic nhận được
-    // Serial.print("Received MQTT message on topic: ");
-    // Serial.println(topic);
-
     // Lưu topic mới vào danh sách
     String topicStr = String(topic);
     bool isNewTopic = false;
@@ -53,16 +49,10 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     if (knownTopics.find(topicStr) == knownTopics.end()) {
         knownTopics.insert(topicStr);
         isNewTopic = true;
-        
-        // Debug: In ra khi phát hiện topic mới
-        // Serial.print("New topic discovered: ");
-        // Serial.println(topicStr);
-        // Serial.print("Total topics known: ");
-        // Serial.println(knownTopics.size());
     }
 
     // Tạo JSON với name và value
-    StaticJsonDocument<200> doc;
+    StaticJsonDocument<512> doc;
     DeserializationError error = deserializeJson(doc, payload, length);
     
     if (error) {
@@ -71,28 +61,16 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
         return;
     }
 
-    // Debug: In ra JSON đã parse
-    // Serial.print("JSON payload: ");
-    // serializeJson(doc, Serial);
-    // Serial.println();
+    // Thêm thông tin topic vào JSON để script map có thể xác định
+    doc["topic"] = topicStr;
 
-    // Nếu topic hiện tại là "#" hoặc topic này là topic đang được subscribe
-    // Hoặc topic này là con của topic đang được subscribe
-    if (currentSubscribedTopic == "#" || 
-        topicStr == currentSubscribedTopic || 
-        topicStr.startsWith(currentSubscribedTopic + "/")) {
-        // Forward JSON message không có address
-        if (ws.count() > 0) {
-            String jsonString;
-            serializeJson(doc, jsonString);
-            ws.textAll(jsonString);
-            
-            // Debug: In ra khi gửi dữ liệu qua WebSocket
-            // Serial.print("Forwarding data to WebSocket. Connected clients: ");
-            // Serial.println(ws.count());
-        }
+    // Forward JSON message có thêm address
+    if (ws.count() > 0) {
+        String jsonString;
+        serializeJson(doc, jsonString);
+        ws.textAll(jsonString);
     }
-
+    
     // Nếu có topic mới, luôn gửi danh sách cập nhật cho clients, không quan tâm ws.count()
     if (isNewTopic) {
         // In ra thông tin về số lượng client WebSocket
@@ -260,6 +238,15 @@ void setup() {
         request->send(SPIFFS, "/script.js", "application/javascript");
     });
     
+    server.on("/map.html", HTTP_GET, [](AsyncWebServerRequest *request){
+        request->send(SPIFFS, "/map.html", "text/html");
+    });
+    server.on("/scriptmap.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        request->send(SPIFFS, "/scriptmap.js", "application/javascript");
+    });
+    server.on("/stylemap.css", HTTP_GET, [](AsyncWebServerRequest *request){
+        request->send(SPIFFS, "/stylemap.css", "text/css");
+    });
     // server.on("/R1.html", HTTP_GET, [](AsyncWebServerRequest *request){
     //     request->send(SPIFFS, "/R1.html", "text/html");
     // });

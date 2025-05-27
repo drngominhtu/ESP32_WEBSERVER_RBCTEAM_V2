@@ -1,0 +1,249 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+header {
+    background-color: #2c3e50;
+    color: #fff;
+    padding: 10px 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+h1 {
+    margin: 0;
+    font-size: 1.5em;
+}
+
+.wifi-info {
+    font-size: 0.8em;
+}
+
+.container {
+    display: flex;
+    max-width: 1400px;
+    margin: 20px auto;
+    gap: 20px;
+}
+
+.sidebar {
+    flex: 0 0 250px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    padding: 15px;
+}
+
+.map-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.map-view {
+    position: relative;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    height: 600px;
+    overflow: hidden;
+}
+
+canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.btn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin: 5px 0;
+    cursor: pointer;
+    width: 100%;
+    transition: background-color 0.2s;
+}
+
+.btn:hover {
+    background-color: #2980b9;
+}
+
+.zoom-controls {
+    display: flex;
+    gap: 5px;
+    margin-top: 10px;
+}
+
+.zoom-controls .btn {
+    flex: 1;
+}
+
+.position-info, .map-controls, .path-info {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+h2 {
+    font-size: 1.1em;
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #2c3e50;
+}
+
+.info-label {
+    font-weight: bold;
+    color: #555;
+}
+
+.status {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.status.connected {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.status.disconnected {
+    background-color: #F44336;
+    color: white;
+}
+
+.status.connecting {
+    background-color: #FFC107;
+    color: black;
+}
+
+.legend {
+    display: flex;
+    gap: 20px;
+    padding: 15px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-top: 15px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    border-radius: 50%;
+}
+
+.map-overlay {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    pointer-events: none;
+}
+
+.dimensions-label {
+    background-color: rgba(255, 255, 255, 0.7);
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #333;
+}
+
+/* Thêm vào file stylemap.css */
+
+.title-with-nav {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.back-button {
+    display: inline-block;
+    color: white;
+    background-color: #2980b9;
+    padding: 5px 12px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+.back-button:hover {
+    background-color: #3498db;
+    text-decoration: none;
+}
+
+.topic-selector {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.topic-input {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.topic-input input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.topic-input .btn {
+    width: auto;
+    white-space: nowrap;
+}
+
+.current-topic {
+    font-size: 0.9em;
+    margin-top: 5px;
+    word-break: break-all; /* Đảm bảo topic dài không làm vỡ layout */
+}
+
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        flex: none;
+    }
+    
+    .map-view {
+        height: 400px;
+    }
+    
+    .header-content {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .title-with-nav {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+}

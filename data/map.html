@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Position Map</title>
+    <link rel="stylesheet" href="stylemap.css">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="title-with-nav">
+                <a href="/" class="back-button">← Back</a>
+                <h1>Robot Position Map</h1>
+            </div>
+            <div class="wifi-info">
+                <p><span class="info-label">WiFi SSID:</span> <span id="wifi-ssid">AML_Robocon</span></p>
+                <p><span class="info-label">IP Address:</span> <span id="ip-address">--</span></p>
+                <p><span class="info-label">Status:</span> <span id="wifi-status" class="status">--</span></p>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="sidebar">
+            <div class="position-info">
+                <h2>Current Position</h2>
+                <div class="position-data">
+                    <p><span class="info-label">X:</span> <span id="position-x">0.00</span> m</p>
+                    <p><span class="info-label">Y:</span> <span id="position-y">0.00</span> m</p>
+                </div>
+            </div>
+            
+            <div class="topic-selector">
+                <h2>Topic Selection</h2>
+                <div class="topic-input">
+                    <input type="text" id="topic-input" placeholder="Enter topic (e.g. R1/data)">
+                    <button id="topic-confirm" class="btn">Apply</button>
+                </div>
+                <div class="current-topic">
+                    <p><span class="info-label">Current Topic:</span> <span id="current-topic">ALL</span></p>
+                </div>
+            </div>
+            
+            <div class="map-controls">
+                <h2>Controls</h2>
+                <button id="reset-btn" class="btn">Reset Path</button>
+                <button id="center-btn" class="btn">Center View</button>
+                <div class="zoom-controls">
+                    <button id="zoom-in-btn" class="btn">Zoom In</button>
+                    <button id="zoom-out-btn" class="btn">Zoom Out</button>
+                </div>
+            </div>
+            
+            <div class="path-info">
+                <h2>Path Information</h2>
+                <p><span class="info-label">Points:</span> <span id="path-points">0</span></p>
+                <p><span class="info-label">Distance:</span> <span id="total-distance">0.00</span> m</p>
+            </div>
+        </div>
+        
+        <div class="map-container">
+            <div class="map-view">
+                <canvas id="position-map"></canvas>
+                <div class="map-overlay">
+                    <div class="dimensions-label">Arena Size: 15m x 8m</div>
+                </div>
+            </div>
+            
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #FF5733;"></div>
+                    <div class="legend-text">Current Position</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #3498DB;"></div>
+                    <div class="legend-text">Path History</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Thêm trước để đảm bảo script chính đã được tải -->
+    <script src="script.js"></script>
+    <!-- Script cho map -->
+    <script src="scriptmap.js"></script>
+</body>
+</html>

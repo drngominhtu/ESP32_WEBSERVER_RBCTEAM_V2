@@ -1,3 +1,6 @@
+// Biến lưu dữ liệu mới nhất nhận được
+window.lastReceivedData = null;
+
 // MQTT Configuration
 const MQTT_CONFIG = {
     broker: '192.168.5.1',
@@ -37,8 +40,31 @@ function onConnect() {
 
 function onMessageArrived(message) {
     try {
+        // In ra thông tin raw message để debug
+        console.log('Raw message:', message);
+        
         const data = JSON.parse(message.payloadString);
         console.log('Received data:', data);
+        
+        // Thêm thông tin topic nếu chưa có
+        if (!data.topic && message.destinationName) {
+            data.topic = message.destinationName;
+        }
+        
+        // Lưu dữ liệu mới nhất
+        window.lastReceivedData = data;
+        
+        // Phát sự kiện để thông báo cho scriptmap.js
+        const dataEvent = new CustomEvent('data-updated', { detail: data });
+        window.dispatchEvent(dataEvent);
+        
+        // Nếu hàm updateMapData tồn tại, gọi nó
+        if (typeof window.updateMapData === 'function') {
+            console.log('Sending data to map:', data);
+            window.updateMapData(data);
+        }
+        
+        // Xử lý dữ liệu cho bảng WatchR1
         updateWatchR1Values(data);
     } catch (error) {
         console.error('Error parsing message:', error);
@@ -1002,6 +1028,21 @@ function onMessage(event) {
                 updateConnectionStatus('Subscription failed');
             }
             return;
+        }
+        
+        // Thêm code để debug dữ liệu
+        console.log('WebSocket received data:', data);
+        
+        // Lưu dữ liệu mới nhất
+        window.lastReceivedData = data;
+        
+        // Phát sự kiện để thông báo có dữ liệu mới
+        const dataEvent = new CustomEvent('data-updated', { detail: data });
+        window.dispatchEvent(dataEvent);
+        
+        // Gọi hàm updateMapData nếu nó tồn tại
+        if (typeof window.updateMapData === 'function') {
+            window.updateMapData(data);
         }
         
         // Handle normal data messages
