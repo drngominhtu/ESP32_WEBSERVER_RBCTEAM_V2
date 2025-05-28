@@ -6,9 +6,10 @@
 // Khai báo biến toàn cục cho map
 let mapCanvas, mapCtx;
 let canvasWidth, canvasHeight;
-const FIELD_WIDTH = 15; // Chiều rộng thực tế 15m
-const FIELD_HEIGHT = 8; // Chiều cao thực tế 8m
-const ROBOT_RADIUS = 0.3; // Bán kính robot (m)
+// Thay đổi từ mét sang milimet
+const FIELD_WIDTH = 15000; // 15000mm thay vì 15m
+const FIELD_HEIGHT = 8000; // 8000mm thay vì 8m
+const ROBOT_RADIUS = 400;  // 400mm thay vì 0.4m
 const PATH_HISTORY_MAX = 1000; // Số điểm tối đa trong lịch sử đường đi
 let scaleX, scaleY;
 let offsetX = 0, offsetY = 0;
@@ -128,6 +129,7 @@ function processPositionData(data) {
     
     console.log("Map: Đã nhận dữ liệu mới:", data);
     
+    // Kiểm tra topic
     if (data.topic) {
         console.log("Map: Topic của dữ liệu:", data.topic);
     } else {
@@ -162,18 +164,18 @@ function processPositionData(data) {
     console.log(`Map: Tìm thấy encoderX=${encoderX}, encoderY=${encoderY}`);
     
     if (encoderX !== null && encoderY !== null) {
-        // Chuyển đổi an toàn sang số
+        // Chuyển đổi an toàn sang số - giá trị đã là milimet, không cần nhân 1000
         const newX = safeParseFloat(encoderX);
         const newY = safeParseFloat(encoderY);
         
-        console.log(`Map: Sau khi parse - X=${newX}, Y=${newY}`);
+        console.log(`Map: Sau khi parse - X=${newX}mm, Y=${newY}mm`);
         
-        // Cập nhật vị trí robot luôn được thực hiện để hiển thị vị trí hiện tại
-        if (!isNaN(newX) && !isNaN(newY) && Math.abs(newX) < 10000 && Math.abs(newY) < 10000) {
+        // Kiểm tra giá trị hợp lệ - điều chỉnh giới hạn cho milimet
+        if (!isNaN(newX) && !isNaN(newY) && Math.abs(newX) < 10000000 && Math.abs(newY) < 10000000) {
             robotPosition.x = newX;
             robotPosition.y = newY;
             
-            // Cập nhật hiển thị vị trí
+            // Cập nhật hiển thị vị trí - hiển thị theo mm
             updatePositionDisplay(newX, newY);
             
             // Chỉ cập nhật lịch sử đường đi nếu đang ghi
@@ -182,10 +184,11 @@ function processPositionData(data) {
                     const lastPos = pathHistory[pathHistory.length - 1];
                     const dist = calculateDistance(lastPos.x, lastPos.y, newX, newY);
                     
-                    // Cập nhật tổng khoảng cách chỉ khi vị trí thực sự thay đổi
-                    if (dist > 0.01) { // Bỏ qua thay đổi nhỏ để tránh tích lũy nhiễu
+                    // Cập nhật tổng khoảng cách - điều chỉnh ngưỡng cho milimet
+                    if (dist > 10) { // Bỏ qua thay đổi nhỏ dưới 10mm
                         totalDistance += dist;
-                        document.getElementById('total-distance').textContent = totalDistance.toFixed(2);
+                        document.getElementById('total-distance').textContent = (totalDistance).toFixed(0);
+                        document.getElementById('path-points').textContent = pathHistory.length + 1;
                         
                         // Thêm vào lịch sử
                         addToPathHistory(newX, newY);
@@ -193,13 +196,14 @@ function processPositionData(data) {
                 } else {
                     // Điểm đầu tiên
                     addToPathHistory(newX, newY);
+                    document.getElementById('path-points').textContent = '1';
                 }
             }
             
             // Vẽ lại bản đồ
             drawMap();
         } else {
-            console.log(`Map: Giá trị không hợp lệ hoặc vượt quá giới hạn - X=${newX}, Y=${newY}`);
+            console.log(`Map: Giá trị không hợp lệ hoặc vượt quá giới hạn - X=${newX}mm, Y=${newY}mm`);
         }
     } else {
         console.log("Map: Không tìm thấy giá trị encoderX hoặc encoderY trong dữ liệu");
@@ -271,8 +275,11 @@ function addToPathHistory(x, y) {
 
 // Cập nhật hiển thị vị trí
 function updatePositionDisplay(x, y) {
-    document.getElementById('position-x').textContent = x.toFixed(2);
-    document.getElementById('position-y').textContent = y.toFixed(2);
+    const posXElement = document.getElementById('position-x');
+    const posYElement = document.getElementById('position-y');
+    
+    if (posXElement) posXElement.textContent = Math.round(x); // Làm tròn số nguyên cho mm
+    if (posYElement) posYElement.textContent = Math.round(y); // Làm tròn số nguyên cho mm
 }
 
 // Cập nhật trạng thái kết nối
@@ -368,15 +375,15 @@ function drawMap() {
     // Khôi phục trạng thái
     mapCtx.restore();
     
-    // Thêm thông báo về hệ toạ độ
+    // Thêm thông báo về hệ toạ độ và đơn vị
     mapCtx.fillStyle = '#333';
     mapCtx.font = 'italic 10px Arial';
-    mapCtx.fillText('*Gốc toạ độ (0,0) ở góc dưới bên phải', fieldX + 5, fieldY + 15);
+    mapCtx.fillText('*Gốc toạ độ (0,0) ở góc dưới bên phải. Đơn vị: milimet (mm)', fieldX + 5, fieldY + 15);
 }
 
 // Vẽ lưới
 function drawGrid(fieldX, fieldY, fieldWidth, fieldHeight) {
-    const gridSize = 1; // 1 mét
+    const gridSize = 1000; // 1000mm = 1m
     const pixelsPerMeterX = fieldWidth / FIELD_WIDTH;
     const pixelsPerMeterY = fieldHeight / FIELD_HEIGHT;
     
@@ -394,11 +401,11 @@ function drawGrid(fieldX, fieldY, fieldWidth, fieldHeight) {
         mapCtx.stroke();
         
         // Vẽ nhãn trục X - đảo ngược giá trị
-        if (x % 5 === 0 || x === FIELD_WIDTH) {
+        if (x % 5000 === 0 || x === FIELD_WIDTH) {
             mapCtx.fillStyle = '#666';
             mapCtx.font = '10px Arial';
             // Hiển thị giá trị đảo ngược (FIELD_WIDTH - x)
-            mapCtx.fillText(`${FIELD_WIDTH - x}m`, pixelX + 2, fieldY + fieldHeight - 2);
+            mapCtx.fillText(`${(FIELD_WIDTH - x)}mm`, pixelX + 2, fieldY + fieldHeight - 2);
         }
     }
     
@@ -412,10 +419,10 @@ function drawGrid(fieldX, fieldY, fieldWidth, fieldHeight) {
         mapCtx.stroke();
         
         // Vẽ nhãn trục Y
-        if (y % 5 === 0 || y === FIELD_HEIGHT) {
+        if (y % 5000 === 0 || y === FIELD_HEIGHT) {
             mapCtx.fillStyle = '#666';
             mapCtx.font = '10px Arial';
-            mapCtx.fillText(`${y}m`, fieldX + 2, pixelY - 2);
+            mapCtx.fillText(`${y}mm`, fieldX + 2, pixelY - 2);
         }
     }
     
@@ -440,8 +447,8 @@ function drawGrid(fieldX, fieldY, fieldWidth, fieldHeight) {
     // Thêm nhãn cho đường chính giữa - điều chỉnh giá trị X
     mapCtx.fillStyle = '#7b1fa2';
     mapCtx.font = 'bold 10px Arial';
-    mapCtx.fillText(`Giữa (${FIELD_WIDTH/2}m)`, centerX + 3, fieldY + 12);
-    mapCtx.fillText(`Giữa (${FIELD_HEIGHT/2}m)`, fieldX + 3, centerY - 5);
+    mapCtx.fillText(`Giữa (${FIELD_WIDTH/2}mm)`, centerX + 3, fieldY + 12);
+    mapCtx.fillText(`Giữa (${FIELD_HEIGHT/2}mm)`, fieldX + 3, centerY - 5);
 }
 
 // Vẽ lịch sử đường đi
@@ -583,7 +590,7 @@ function exportImage() {
         tempCtx.scale(zoomLevel, zoomLevel);
         tempCtx.translate(-canvasWidth / 2, -canvasHeight / 2);
         
-        // Tính toán kích thước và vị trí của hình chữ nhật - SỬA PHẦN NÀY
+        // Tính toán kích thước và vị trí của hình chữ nhật
         const fieldPixelWidth = FIELD_WIDTH * (canvasWidth / FIELD_WIDTH);
         const fieldPixelHeight = FIELD_HEIGHT * (canvasHeight / FIELD_HEIGHT);
         const fieldX = (canvasWidth - fieldPixelWidth) / 2;
@@ -598,28 +605,29 @@ function exportImage() {
         tempCtx.lineWidth = 2;
         tempCtx.strokeRect(fieldX, fieldY, fieldPixelWidth, fieldPixelHeight);
         
-        // Vẽ lưới - SỬA PHẦN NÀY
-        const gridSize = 1; // 1 mét
+        // Vẽ lưới
         const pixelsPerMeterX = fieldPixelWidth / FIELD_WIDTH;
         const pixelsPerMeterY = fieldPixelHeight / FIELD_HEIGHT;
         
         tempCtx.strokeStyle = '#ddd';
         tempCtx.lineWidth = 0.5;
         
-        // Vẽ lưới dọc và ngang - đảo ngược nhãn X
+        // Vẽ lưới dọc và ngang - điều chỉnh cho milimet
+        const gridSize = 1000; // 1000mm = 1m
+        
         for (let x = 0; x <= FIELD_WIDTH; x += gridSize) {
             const pixelX = fieldX + x * pixelsPerMeterX;
+            
             tempCtx.beginPath();
             tempCtx.moveTo(pixelX, fieldY);
             tempCtx.lineTo(pixelX, fieldY + fieldPixelHeight);
             tempCtx.stroke();
             
-            // Thêm nhãn cho trục X
-            if (x % 5 === 0 || x === FIELD_WIDTH) {
+            // Vẽ nhãn X
+            if (x % 5000 === 0 || x === FIELD_WIDTH) {
                 tempCtx.fillStyle = '#666';
-                tempCtx.font = '10px Arial';
-                // Hiển thị giá trị đảo ngược (FIELD_WIDTH - x)
-                tempCtx.fillText(`${FIELD_WIDTH - x}m`, pixelX + 2, fieldY + fieldPixelHeight - 2);
+                tempCtx.font = '12px Arial';
+                tempCtx.fillText(`${FIELD_WIDTH - x}mm`, pixelX + 2, fieldY + fieldPixelHeight - 4);
             }
         }
         
@@ -630,11 +638,11 @@ function exportImage() {
             tempCtx.lineTo(fieldX + fieldPixelWidth, pixelY);
             tempCtx.stroke();
             
-            // Thêm nhãn cho trục Y
-            if (y % 5 === 0 || y === FIELD_HEIGHT) {
+            // Vẽ nhãn Y
+            if (y % 5000 === 0 || y === FIELD_HEIGHT) {
                 tempCtx.fillStyle = '#666';
-                tempCtx.font = '10px Arial';
-                tempCtx.fillText(`${y}m`, fieldX + 2, pixelY - 2);
+                tempCtx.font = '12px Arial';
+                tempCtx.fillText(`${y}mm`, fieldX + 4, pixelY - 4);
             }
         }
         
@@ -656,29 +664,54 @@ function exportImage() {
         tempCtx.lineTo(fieldX + fieldPixelWidth, centerY);
         tempCtx.stroke();
         
-        // Vẽ đường đi
+        // Thêm nhãn cho đường chính giữa
+        tempCtx.fillStyle = '#7b1fa2';
+        tempCtx.font = 'bold 12px Arial';
+        tempCtx.fillText(`Giữa (${FIELD_WIDTH/2}mm)`, centerX + 5, fieldY + 16);
+        tempCtx.fillText(`Giữa (${FIELD_HEIGHT/2}mm)`, fieldX + 5, centerY - 8);
+        
+        // VẼ ĐƯỜNG ĐI CỦA ROBOT (phần bị thiếu)
         if (pathHistory.length >= 2) {
             tempCtx.strokeStyle = '#3498DB';
-            tempCtx.lineWidth = 2;
+            tempCtx.lineWidth = 3;
             tempCtx.beginPath();
             
-            // Điểm đầu tiên - sửa cách tính toán
+            // Điểm đầu tiên
             const startX = fieldX + (FIELD_WIDTH - pathHistory[0].x) * pixelsPerMeterX;
             const startY = fieldY + (FIELD_HEIGHT - pathHistory[0].y) * pixelsPerMeterY;
             tempCtx.moveTo(startX, startY);
             
             // Vẽ đường nối các điểm
             for (let i = 1; i < pathHistory.length; i++) {
-                // Sửa cách tính toán tọa độ cho phù hợp với hệ toạ độ mới
                 const x = fieldX + (FIELD_WIDTH - pathHistory[i].x) * pixelsPerMeterX;
                 const y = fieldY + (FIELD_HEIGHT - pathHistory[i].y) * pixelsPerMeterY;
                 tempCtx.lineTo(x, y);
             }
             
             tempCtx.stroke();
+            
+            // Vẽ điểm bắt đầu và kết thúc
+            tempCtx.fillStyle = '#27ae60'; // Màu xanh lá cho điểm bắt đầu
+            tempCtx.beginPath();
+            tempCtx.arc(startX, startY, 8, 0, Math.PI * 2);
+            tempCtx.fill();
+            
+            // Điểm kết thúc
+            const endX = fieldX + (FIELD_WIDTH - pathHistory[pathHistory.length-1].x) * pixelsPerMeterX;
+            const endY = fieldY + (FIELD_HEIGHT - pathHistory[pathHistory.length-1].y) * pixelsPerMeterY;
+            tempCtx.fillStyle = '#e74c3c'; // Màu đỏ cho điểm kết thúc
+            tempCtx.beginPath();
+            tempCtx.arc(endX, endY, 8, 0, Math.PI * 2);
+            tempCtx.fill();
+            
+            // Thêm nhãn start và end
+            tempCtx.fillStyle = '#000';
+            tempCtx.font = '12px Arial';
+            tempCtx.fillText('Start', startX + 10, startY);
+            tempCtx.fillText('End', endX + 10, endY);
         }
         
-        // Vẽ vị trí robot - sửa cách tính toán
+        // VẼ VỊ TRÍ ROBOT HIỆN TẠI (phần bị thiếu)
         const robotX = fieldX + (FIELD_WIDTH - robotPosition.x) * pixelsPerMeterX;
         const robotY = fieldY + (FIELD_HEIGHT - robotPosition.y) * pixelsPerMeterY;
         const radiusPixels = ROBOT_RADIUS * pixelsPerMeterX;
@@ -690,22 +723,51 @@ function exportImage() {
         
         // Vẽ dấu cộng tại tâm
         tempCtx.strokeStyle = '#fff';
-        tempCtx.lineWidth = 2;
+        tempCtx.lineWidth = 3;
         tempCtx.beginPath();
-        tempCtx.moveTo(robotX - 5, robotY);
-        tempCtx.lineTo(robotX + 5, robotY);
-        tempCtx.moveTo(robotX, robotY - 5);
-        tempCtx.lineTo(robotX, robotY + 5);
+        tempCtx.moveTo(robotX - 8, robotY);
+        tempCtx.lineTo(robotX + 8, robotY);
+        tempCtx.moveTo(robotX, robotY - 8);
+        tempCtx.lineTo(robotX, robotY + 8);
         tempCtx.stroke();
         
-        // Thêm chú thích
+        // Thêm chú thích - điều chỉnh cho milimet
         tempCtx.fillStyle = '#333';
         tempCtx.font = '14px Arial';
-        tempCtx.fillText(`Total Distance: ${totalDistance.toFixed(2)}m`, 10, 20);
+        tempCtx.fillText(`Total Distance: ${totalDistance.toFixed(0)}mm`, 10, 20);
         tempCtx.fillText(`Points: ${pathHistory.length}`, 10, 40);
         tempCtx.fillText(`Topic: ${currentSelectedTopic || 'ALL'}`, 10, 60);
         tempCtx.fillText(`Generated: ${new Date().toLocaleString()}`, 10, 80);
         tempCtx.fillText(`*Gốc toạ độ (0,0) ở góc dưới bên phải`, 10, 100);
+        
+        // Thêm chú giải màu sắc
+        const legendY = 130;
+        tempCtx.fillStyle = '#333';
+        tempCtx.fillText('Chú thích:', 10, legendY);
+        
+        // Màu đường đi
+        tempCtx.fillStyle = '#3498DB';
+        tempCtx.fillRect(10, legendY + 10, 20, 10);
+        tempCtx.fillStyle = '#333';
+        tempCtx.fillText('Đường đi', 35, legendY + 18);
+        
+        // Màu robot
+        tempCtx.fillStyle = '#FF5733';
+        tempCtx.fillRect(10, legendY + 30, 20, 10);
+        tempCtx.fillStyle = '#333';
+        tempCtx.fillText('Vị trí robot', 35, legendY + 38);
+        
+        // Điểm bắt đầu
+        tempCtx.fillStyle = '#27ae60';
+        tempCtx.fillRect(10, legendY + 50, 20, 10);
+        tempCtx.fillStyle = '#333';
+        tempCtx.fillText('Điểm bắt đầu', 35, legendY + 58);
+        
+        // Điểm kết thúc
+        tempCtx.fillStyle = '#e74c3c';
+        tempCtx.fillRect(10, legendY + 70, 20, 10);
+        tempCtx.fillStyle = '#333';
+        tempCtx.fillText('Điểm kết thúc', 35, legendY + 78);
         
         // Tạo URL cho hình ảnh
         const imageURL = tempCanvas.toDataURL('image/png');
@@ -761,6 +823,7 @@ function exportPathAsJSON() {
             timestamp: new Date().toISOString(),
             topic: currentSelectedTopic || 'ALL',
             totalDistance: totalDistance,
+            unit: 'mm', // Làm rõ đơn vị là mm
             points: pathHistory.length,
             path: pathHistory
         };
