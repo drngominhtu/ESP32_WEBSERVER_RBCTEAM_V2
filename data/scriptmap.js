@@ -10,7 +10,7 @@ let canvasWidth, canvasHeight;
 const FIELD_WIDTH = 15000; // 15000mm thay vì 15m
 const FIELD_HEIGHT = 8000; // 8000mm thay vì 8m
 const ROBOT_RADIUS = 400;  // 400mm thay vì 0.4m
-const PATH_HISTORY_MAX = 1000; // Số điểm tối đa trong lịch sử đường đi
+const PATH_HISTORY_MAX = 2000; // Số điểm tối đa trong lịch sử đường đi
 let scaleX, scaleY;
 let offsetX = 0, offsetY = 0;
 let zoomLevel = 1;
@@ -489,13 +489,13 @@ function drawRobotPosition(fieldX, fieldY) {
     const radiusPixels = ROBOT_RADIUS * pixelsPerMeterX;
     
     // Vẽ hình tròn đại diện cho robot
-    mapCtx.fillStyle = '#FF5733';
+    mapCtx.strokeStyle = '#FF5733'; // Màu viền cho robot
     mapCtx.beginPath();
     mapCtx.arc(robotX, robotY, radiusPixels, 0, Math.PI * 2);
-    mapCtx.fill();
-    
+    mapCtx.stroke(); // Thêm stroke để viền rõ ràng
+
     // Vẽ dấu cộng tại tâm
-    mapCtx.strokeStyle = '#fff';
+    mapCtx.strokeStyle = '#FF5733'; // Màu viền cho dấu cộng    
     mapCtx.lineWidth = 2;
     mapCtx.beginPath();
     mapCtx.moveTo(robotX - 5, robotY);
@@ -716,13 +716,13 @@ function exportImage() {
         const robotY = fieldY + (FIELD_HEIGHT - robotPosition.y) * pixelsPerMeterY;
         const radiusPixels = ROBOT_RADIUS * pixelsPerMeterX;
         
-        tempCtx.fillStyle = '#FF5733';
+        tempCtx.strokeStyle = '#FF5733';
         tempCtx.beginPath();
         tempCtx.arc(robotX, robotY, radiusPixels, 0, Math.PI * 2);
-        tempCtx.fill();
+        tempCtx.stroke();
         
         // Vẽ dấu cộng tại tâm
-        tempCtx.strokeStyle = '#fff';
+        tempCtx.strokeStyle = '#FF5733';
         tempCtx.lineWidth = 3;
         tempCtx.beginPath();
         tempCtx.moveTo(robotX - 8, robotY);
