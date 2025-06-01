@@ -1,43 +1,139 @@
 /**
- * Script để vẽ bản đồ vị trí robot
- * Sử dụng giá trị encoderX và encoderY từ dữ liệu JSON đã được lấy bởi script.js
+ * Script để vẽ bản đồ vị trí robot - Memory Optimized Version
+ * Sử dụng TypedArray để tiết kiệm bộ nhớ
  */
 
 // Khai báo biến toàn cục cho map
 let mapCanvas, mapCtx;
 let canvasWidth, canvasHeight;
-// Thay đổi từ mét sang milimet
-const FIELD_WIDTH = 15000; // 15000mm thay vì 15m
-const FIELD_HEIGHT = 8000; // 8000mm thay vì 8m
-const ROBOT_RADIUS = 400;  // 400mm thay vì 0.4m
-const PATH_HISTORY_MAX = 2000; // Số điểm tối đa trong lịch sử đường đi
+
+// Field dimensions (mm)
+const FIELD_WIDTH = 15000;  // 15000mm = 15m
+const FIELD_HEIGHT = 8000;  // 8000mm = 8m
+const ROBOT_RADIUS = 400;   // 400mm = 0.4m
+
+// Memory-Optimized Path Storage
+const PATH_HISTORY_MAX = 5000; // Tăng từ 1000 lên 5000 điểm!
+
+// Sử dụng TypedArray thay vì JavaScript Objects
+// Float32Array sử dụng 4 bytes per value (thay vì 8 bytes của Number)
+const pathHistoryX = new Float32Array(PATH_HISTORY_MAX);
+const pathHistoryY = new Float32Array(PATH_HISTORY_MAX);
+const pathTimestamps = new Uint32Array(PATH_HISTORY_MAX); // Timestamps (optional)
+
+// Path management variables
+let pathIndex = 0;          // Current write position
+let pathCount = 0;          // Number of points stored
+let isCircularBuffer = false; // Whether we've filled the buffer once
+
+// Other variables
 let scaleX, scaleY;
 let offsetX = 0, offsetY = 0;
 let zoomLevel = 1;
-
-// Vị trí robot và lịch sử đường đi
 let robotPosition = { x: 0, y: 0 };
-let pathHistory = [];
 let totalDistance = 0;
+let currentSelectedTopic = "";
+let isRecording = false;
 
-// Thêm biến toàn cục để lưu topic hiện tại
-let currentSelectedTopic = ""; // Rỗng nghĩa là nhận tất cả các topic
+// Memory usage statistics
+function getMemoryUsage() {
+    const xArraySize = pathHistoryX.byteLength;
+    const yArraySize = pathHistoryY.byteLength;
+    const timestampArraySize = pathTimestamps.byteLength;
+    const totalBytes = xArraySize + yArraySize + timestampArraySize;
+    
+    return {
+        totalBytes,
+        totalKB: (totalBytes / 1024).toFixed(2),
+        perPoint: (totalBytes / PATH_HISTORY_MAX).toFixed(1),
+        efficiency: `${((52 * PATH_HISTORY_MAX - totalBytes) / (52 * PATH_HISTORY_MAX) * 100).toFixed(1)}% saved`
+    };
+}
+
+// Enhanced path management functions
+function addToPathHistory(x, y) {
+    // Store values in TypedArrays
+    pathHistoryX[pathIndex] = x;
+    pathHistoryY[pathIndex] = y;
+    pathTimestamps[pathIndex] = Date.now();
+    
+    // Update counters
+    pathIndex = (pathIndex + 1) % PATH_HISTORY_MAX;
+    
+    if (pathCount < PATH_HISTORY_MAX) {
+        pathCount++;
+    } else {
+        isCircularBuffer = true;
+    }
+    
+    // Update UI
+    updatePathStats();
+}
+
+function getPathPoint(index) {
+    if (index >= pathCount) return null;
+    
+    let actualIndex;
+    if (!isCircularBuffer) {
+        actualIndex = index;
+    } else {
+        // Calculate actual index in circular buffer
+        actualIndex = (pathIndex + index) % PATH_HISTORY_MAX;
+    }
+    
+    return {
+        x: pathHistoryX[actualIndex],
+        y: pathHistoryY[actualIndex],
+        timestamp: pathTimestamps[actualIndex]
+    };
+}
+
+function getAllPathPoints() {
+    const points = [];
+    for (let i = 0; i < pathCount; i++) {
+        points.push(getPathPoint(i));
+    }
+    return points;
+}
+
+function clearPathHistory() {
+    pathIndex = 0;
+    pathCount = 0;
+    isCircularBuffer = false;
+    totalDistance = 0;
+    
+    // Clear arrays (optional, for memory cleanup)
+    pathHistoryX.fill(0);
+    pathHistoryY.fill(0);
+    pathTimestamps.fill(0);
+    
+    updatePathStats();
+}
+
+function updatePathStats() {
+    document.getElementById('path-points').textContent = pathCount;
+    document.getElementById('total-distance').textContent = totalDistance.toFixed(0);
+    
+    // Update memory usage display
+    const memUsage = getMemoryUsage();
+    const memoryElement = document.getElementById('memory-usage');
+    if (memoryElement) {
+        memoryElement.textContent = `${memUsage.totalKB} KB (${memUsage.efficiency})`;
+    }
+}
 
 // Khởi tạo khi trang được tải
 document.addEventListener('DOMContentLoaded', () => {
+    console.log(`Memory-Optimized Path Storage Initialized:`);
+    console.log(`- Max Points: ${PATH_HISTORY_MAX}`);
+    console.log(`- Memory Usage: ${getMemoryUsage().totalKB} KB`);
+    console.log(`- Memory Efficiency: ${getMemoryUsage().efficiency}`);
+    
     // Khởi tạo canvas
     initMap();
     
     // Thiết lập sự kiện cho các nút điều khiển
-    document.getElementById('reset-btn').addEventListener('click', resetPath);
-    document.getElementById('center-btn').addEventListener('click', centerView);
-    document.getElementById('zoom-in-btn').addEventListener('click', () => changeZoom(1.2));
-    document.getElementById('zoom-out-btn').addEventListener('click', () => changeZoom(0.8));
-    
-    // Thêm sự kiện cho các nút record
-    document.getElementById('start-record-btn').addEventListener('click', startRecording);
-    document.getElementById('stop-record-btn').addEventListener('click', stopRecording);
-    document.getElementById('export-path-btn').addEventListener('click', exportPath);
+    setupEventListeners();
     
     // Cập nhật IP từ nguồn hiện tại
     document.getElementById('ip-address').textContent = window.location.hostname;
@@ -49,18 +145,255 @@ document.addEventListener('DOMContentLoaded', () => {
     // Thiết lập sự kiện để đón nhận dữ liệu mới
     setupDataListener();
     
-    // Thêm sự kiện cho nút xác nhận topic
-    document.getElementById('topic-confirm').addEventListener('click', applyTopicFilter);
+    // Display initial memory stats
+    updatePathStats();
+});
+
+function setupEventListeners() {
+    // Control buttons
+    document.getElementById('reset-btn')?.addEventListener('click', resetPath);
+    document.getElementById('center-btn')?.addEventListener('click', centerView);
+    document.getElementById('zoom-in-btn')?.addEventListener('click', () => changeZoom(1.2));
+    document.getElementById('zoom-out-btn')?.addEventListener('click', () => changeZoom(0.8));
     
-    // Thêm sự kiện để nhấn Enter trong input cũng kích hoạt tìm kiếm
-    document.getElementById('topic-input').addEventListener('keyup', function(event) {
+    // Recording buttons
+    document.getElementById('start-record-btn')?.addEventListener('click', startRecording);
+    document.getElementById('stop-record-btn')?.addEventListener('click', stopRecording);
+    document.getElementById('export-path-btn')?.addEventListener('click', exportPath);
+    
+    // Topic filtering
+    document.getElementById('topic-confirm')?.addEventListener('click', applyTopicFilter);
+    document.getElementById('topic-input')?.addEventListener('keyup', function(event) {
         if (event.key === "Enter") {
             applyTopicFilter();
         }
     });
-});
+    
+    // Memory optimization controls
+    document.getElementById('optimize-memory')?.addEventListener('click', optimizeMemory);
+    document.getElementById('show-memory-stats')?.addEventListener('click', showMemoryStats);
+}
 
-// Khởi tạo canvas bản đồ
+// Enhanced processPositionData with memory-efficient storage
+function processPositionData(data) {
+    if (!data) {
+        console.log("Map: Dữ liệu nhận được là null hoặc undefined");
+        return;
+    }
+    
+    // Topic filtering
+    if (currentSelectedTopic && data.topic) {
+        const normalizedFilter = currentSelectedTopic.toLowerCase();
+        const normalizedTopic = data.topic.toLowerCase();
+        
+        if (!normalizedTopic.includes(normalizedFilter) && !normalizedFilter.includes(normalizedTopic)) {
+            return;
+        }
+    }
+    
+    // Extract encoder values
+    const encoderX = getValueFromJson(data, ['encoder x', 'encoderX', 'EncoderX', 'positionX', 'x', 'X']);
+    const encoderY = getValueFromJson(data, ['encoder y', 'encoderY', 'EncoderY', 'positionY', 'y', 'Y']);
+    
+    if (encoderX !== null && encoderY !== null) {
+        const newX = safeParseFloat(encoderX);
+        const newY = safeParseFloat(encoderY);
+        
+        if (!isNaN(newX) && !isNaN(newY) && Math.abs(newX) < 10000000 && Math.abs(newY) < 10000000) {
+            robotPosition.x = newX;
+            robotPosition.y = newY;
+            
+            updatePositionDisplay(newX, newY);
+            
+            // Recording logic with memory-efficient storage
+            if (isRecording) {
+                if (pathCount > 0) {
+                    const lastPoint = getPathPoint(pathCount - 1);
+                    const dist = calculateDistance(lastPoint.x, lastPoint.y, newX, newY);
+                    
+                    if (dist > 10) { // Minimum movement threshold
+                        totalDistance += dist;
+                        addToPathHistory(newX, newY);
+                    }
+                } else {
+                    addToPathHistory(newX, newY);
+                }
+            }
+            
+            drawMap();
+        }
+    }
+}
+
+// Memory-optimized drawing functions
+function drawPathHistory(fieldX, fieldY) {
+    if (pathCount < 2) return;
+    
+    const pixelsPerMeterX = (canvasWidth / FIELD_WIDTH);
+    const pixelsPerMeterY = (canvasHeight / FIELD_HEIGHT);
+    
+    mapCtx.strokeStyle = '#3498DB';
+    mapCtx.lineWidth = 2;
+    mapCtx.beginPath();
+    
+    // Start point
+    const firstPoint = getPathPoint(0);
+    const startX = fieldX + (FIELD_WIDTH - firstPoint.x) * pixelsPerMeterX;
+    const startY = fieldY + (FIELD_HEIGHT - firstPoint.y) * pixelsPerMeterY;
+    mapCtx.moveTo(startX, startY);
+    
+    // Draw path using optimized point access
+    for (let i = 1; i < pathCount; i++) {
+        const point = getPathPoint(i);
+        const x = fieldX + (FIELD_WIDTH - point.x) * pixelsPerMeterX;
+        const y = fieldY + (FIELD_HEIGHT - point.y) * pixelsPerMeterY;
+        mapCtx.lineTo(x, y);
+    }
+    
+    mapCtx.stroke();
+    
+    // Draw start and end markers for long paths
+    if (pathCount > 10) {
+        // Start marker
+        mapCtx.fillStyle = '#27ae60';
+        mapCtx.beginPath();
+        mapCtx.arc(startX, startY, 6, 0, Math.PI * 2);
+        mapCtx.fill();
+        
+        // End marker
+        const lastPoint = getPathPoint(pathCount - 1);
+        const endX = fieldX + (FIELD_WIDTH - lastPoint.x) * pixelsPerMeterX;
+        const endY = fieldY + (FIELD_HEIGHT - lastPoint.y) * pixelsPerMeterY;
+        mapCtx.fillStyle = '#e74c3c';
+        mapCtx.beginPath();
+        mapCtx.arc(endX, endY, 6, 0, Math.PI * 2);
+        mapCtx.fill();
+    }
+}
+
+// Enhanced export functions
+function exportPathAsJSON() {
+    try {
+        const memUsage = getMemoryUsage();
+        
+        const exportData = {
+            timestamp: new Date().toISOString(),
+            topic: currentSelectedTopic || 'ALL',
+            totalDistance: totalDistance,
+            unit: 'mm',
+            points: pathCount,
+            maxCapacity: PATH_HISTORY_MAX,
+            memoryUsage: memUsage,
+            isCircularBuffer: isCircularBuffer,
+            path: getAllPathPoints() // Convert TypedArray to regular array for JSON
+        };
+        
+        const jsonString = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `robot_path_${PATH_HISTORY_MAX}pts_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+        a.click();
+        
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+        
+        console.log('Path exported with memory stats:', memUsage);
+        
+    } catch (error) {
+        console.error('Export error:', error);
+        alert('Failed to export: ' + error.message);
+    }
+}
+
+// Memory optimization utilities
+function optimizeMemory() {
+    // Compact the path by removing redundant points
+    if (pathCount < 100) return;
+    
+    const threshold = 5; // mm - remove points closer than this
+    const newX = new Float32Array(PATH_HISTORY_MAX);
+    const newY = new Float32Array(PATH_HISTORY_MAX);
+    const newTimestamps = new Uint32Array(PATH_HISTORY_MAX);
+    
+    let newCount = 0;
+    let lastX = pathHistoryX[0];
+    let lastY = pathHistoryY[0];
+    
+    // Always keep first point
+    newX[0] = lastX;
+    newY[0] = lastY;
+    newTimestamps[0] = pathTimestamps[0];
+    newCount = 1;
+    
+    for (let i = 1; i < pathCount; i++) {
+        const point = getPathPoint(i);
+        const dist = calculateDistance(lastX, lastY, point.x, point.y);
+        
+        if (dist >= threshold || i === pathCount - 1) {
+            newX[newCount] = point.x;
+            newY[newCount] = point.y;
+            newTimestamps[newCount] = point.timestamp;
+            newCount++;
+            lastX = point.x;
+            lastY = point.y;
+        }
+    }
+    
+    // Replace arrays
+    pathHistoryX.set(newX.subarray(0, newCount));
+    pathHistoryY.set(newY.subarray(0, newCount));
+    pathTimestamps.set(newTimestamps.subarray(0, newCount));
+    
+    // Update counters
+    pathCount = newCount;
+    pathIndex = newCount % PATH_HISTORY_MAX;
+    isCircularBuffer = false;
+    
+    updatePathStats();
+    drawMap();
+    
+    console.log(`Memory optimized: Reduced from ${pathCount} to ${newCount} points`);
+}
+
+function showMemoryStats() {
+    const memUsage = getMemoryUsage();
+    const stats = `
+Memory Statistics:
+- Total Memory: ${memUsage.totalKB} KB
+- Per Point: ${memUsage.perPoint} bytes
+- Efficiency: ${memUsage.efficiency}
+- Points Stored: ${pathCount}/${PATH_HISTORY_MAX}
+- Buffer Type: ${isCircularBuffer ? 'Circular' : 'Linear'}
+
+Comparison with Object Storage:
+- Object Method: ${(52 * PATH_HISTORY_MAX / 1024).toFixed(2)} KB
+- TypedArray Method: ${memUsage.totalKB} KB
+- Memory Saved: ${((52 * PATH_HISTORY_MAX - memUsage.totalBytes) / 1024).toFixed(2)} KB
+    `;
+    
+    alert(stats);
+}
+
+// Reset with memory cleanup
+function resetPath() {
+    if (pathCount > 0) {
+        const confirmReset = confirm(`Reset ${pathCount} points? This will free ${getMemoryUsage().totalKB} KB of data.`);
+        if (!confirmReset) return;
+    }
+    
+    clearPathHistory();
+    drawMap();
+    
+    if (isRecording) {
+        stopRecording();
+    }
+    
+    console.log('Path reset - Memory cleared');
+}
+
+// Keep all other existing functions unchanged
 function initMap() {
     mapCanvas = document.getElementById('position-map');
     if (!mapCanvas) {
@@ -69,220 +402,82 @@ function initMap() {
     }
     
     mapCtx = mapCanvas.getContext('2d');
-    
-    // Thiết lập kích thước canvas
     resizeCanvas();
-    
-    // Theo dõi sự kiện resize
     window.addEventListener('resize', resizeCanvas);
 }
 
-// Thiết lập lắng nghe dữ liệu mới
 function setupDataListener() {
     console.log('Map: Setting up data listeners');
     
-    // Phương thức 1: Đăng ký custom event từ script.js
     window.addEventListener('data-updated', function(event) {
-        console.log('Map: Received data-updated event');
         const data = event.detail;
         processPositionData(data);
     });
     
-    // Phương thức 2: Định nghĩa hàm cập nhật để script.js gọi trực tiếp
     window.updateMapData = function(data) {
-        console.log('Map: updateMapData called with data:', data);
         processPositionData(data);
     };
     
-    // Phương thức 3: Kiểm tra dữ liệu mới định kỳ
     setInterval(() => {
         if (window.lastReceivedData) {
-            console.log('Map: Checking lastReceivedData:', window.lastReceivedData);
             processPositionData(window.lastReceivedData);
         }
-    }, 1000); // Tăng lên 1000ms để giảm số lượng log
+    }, 1000);
 }
 
-// Thêm hàm để áp dụng bộ lọc topic
 function applyTopicFilter() {
     const topicInput = document.getElementById('topic-input');
     const newTopic = topicInput.value.trim();
     
-    // Cập nhật biến global
     currentSelectedTopic = newTopic;
-    
-    // Cập nhật UI
     document.getElementById('current-topic').textContent = currentSelectedTopic || "ALL";
     
-    // Reset đường đi khi thay đổi topic
     resetPath();
-    
     console.log(`Topic filter applied: ${currentSelectedTopic || "ALL"}`);
-}
-
-// Xử lý dữ liệu vị trí từ JSON
-function processPositionData(data) {
-    if (!data) {
-        console.log("Map: Dữ liệu nhận được là null hoặc undefined");
-        return;
-    }
-    
-    console.log("Map: Đã nhận dữ liệu mới:", data);
-    
-    // Kiểm tra topic
-    if (data.topic) {
-        console.log("Map: Topic của dữ liệu:", data.topic);
-    } else {
-        console.log("Map: Dữ liệu không có thông tin topic");
-    }
-    
-    // Kiểm tra xem dữ liệu có đến từ topic đã chọn không
-    if (currentSelectedTopic && data.topic) {
-        // Chuyển cả hai sang chữ thường để tránh lỗi phân biệt hoa thường
-        const normalizedFilter = currentSelectedTopic.toLowerCase();
-        const normalizedTopic = data.topic.toLowerCase();
-        
-        console.log(`Map: Kiểm tra topic - Filter: ${normalizedFilter}, Data: ${normalizedTopic}`);
-        
-        // Kiểm tra cả hai chiều - topic có chứa filter hoặc filter có chứa topic
-        if (!normalizedTopic.includes(normalizedFilter) && !normalizedFilter.includes(normalizedTopic)) {
-            console.log(`Map: Topic không phù hợp với filter, bỏ qua dữ liệu`);
-            return;
-        }
-    }
-    
-    // In ra toàn bộ thuộc tính của object để tìm encoder
-    console.log("Map: Tất cả các thuộc tính trong dữ liệu:");
-    for (const key in data) {
-        console.log(`    ${key}: ${data[key]}`);
-    }
-    
-    // Tìm giá trị encoder với nhiều tên khả dĩ hơn
-    const encoderX = getValueFromJson(data, ['encoderX', 'EncoderX', 'positionX', 'PositionX', 'x', 'X', 'encoder_x', 'pos_x', 'px']);
-    const encoderY = getValueFromJson(data, ['encoderY', 'EncoderY', 'positionY', 'PositionY', 'y', 'Y', 'encoder_y', 'pos_y', 'py']);
-    
-    console.log(`Map: Tìm thấy encoderX=${encoderX}, encoderY=${encoderY}`);
-    
-    if (encoderX !== null && encoderY !== null) {
-        // Chuyển đổi an toàn sang số - giá trị đã là milimet, không cần nhân 1000
-        const newX = safeParseFloat(encoderX);
-        const newY = safeParseFloat(encoderY);
-        
-        console.log(`Map: Sau khi parse - X=${newX}mm, Y=${newY}mm`);
-        
-        // Kiểm tra giá trị hợp lệ - điều chỉnh giới hạn cho milimet
-        if (!isNaN(newX) && !isNaN(newY) && Math.abs(newX) < 10000000 && Math.abs(newY) < 10000000) {
-            robotPosition.x = newX;
-            robotPosition.y = newY;
-            
-            // Cập nhật hiển thị vị trí - hiển thị theo mm
-            updatePositionDisplay(newX, newY);
-            
-            // Chỉ cập nhật lịch sử đường đi nếu đang ghi
-            if (isRecording) {
-                if (pathHistory.length > 0) {
-                    const lastPos = pathHistory[pathHistory.length - 1];
-                    const dist = calculateDistance(lastPos.x, lastPos.y, newX, newY);
-                    
-                    // Cập nhật tổng khoảng cách - điều chỉnh ngưỡng cho milimet
-                    if (dist > 10) { // Bỏ qua thay đổi nhỏ dưới 10mm
-                        totalDistance += dist;
-                        document.getElementById('total-distance').textContent = (totalDistance).toFixed(0);
-                        document.getElementById('path-points').textContent = pathHistory.length + 1;
-                        
-                        // Thêm vào lịch sử
-                        addToPathHistory(newX, newY);
-                    }
-                } else {
-                    // Điểm đầu tiên
-                    addToPathHistory(newX, newY);
-                    document.getElementById('path-points').textContent = '1';
-                }
-            }
-            
-            // Vẽ lại bản đồ
-            drawMap();
-        } else {
-            console.log(`Map: Giá trị không hợp lệ hoặc vượt quá giới hạn - X=${newX}mm, Y=${newY}mm`);
-        }
-    } else {
-        console.log("Map: Không tìm thấy giá trị encoderX hoặc encoderY trong dữ liệu");
-    }
 }
 
 function safeParseFloat(value) {
     if (typeof value === 'number') return value;
     if (typeof value !== 'string') return NaN;
     
-    // Loại bỏ các ký tự không phải số, dấu thập phân, dấu âm
     const cleanValue = value.replace(/[^0-9.-]/g, '');
     return parseFloat(cleanValue);
 }
 
-// Mở rộng hàm getValueFromJson để tìm kiếm sâu hơn
 function getValueFromJson(data, possibleNames) {
-    // Kiểm tra cấp cao nhất
     for (const name of possibleNames) {
-        if (data[name] !== undefined) {
-            console.log(`Map: Tìm thấy ${name} ở cấp cao nhất:`, data[name]);
-            return data[name];
-        }
+        if (data[name] !== undefined) return data[name];
     }
     
-    // Kiểm tra trong data.data (cấu trúc phổ biến)
     if (data.data && typeof data.data === 'object') {
         for (const name of possibleNames) {
-            if (data.data[name] !== undefined) {
-                console.log(`Map: Tìm thấy ${name} trong data.data:`, data.data[name]);
-                return data.data[name];
-            }
+            if (data.data[name] !== undefined) return data.data[name];
         }
     }
     
-    // Kiểm tra trong các trường con cấp 1
     for (const key in data) {
         if (typeof data[key] === 'object' && data[key] !== null) {
             for (const name of possibleNames) {
-                if (data[key][name] !== undefined) {
-                    console.log(`Map: Tìm thấy ${name} trong ${key}:`, data[key][name]);
-                    return data[key][name];
-                }
+                if (data[key][name] !== undefined) return data[key][name];
             }
         }
     }
     
-    console.log("Map: Không tìm thấy các trường sau trong dữ liệu:", possibleNames);
     return null;
 }
 
-// Tính khoảng cách giữa hai điểm
 function calculateDistance(x1, y1, x2, y2) {
     return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
 }
 
-// Thêm vị trí vào lịch sử đường đi
-function addToPathHistory(x, y) {
-    pathHistory.push({ x, y });
-    
-    // Giới hạn số lượng điểm trong lịch sử
-    if (pathHistory.length > PATH_HISTORY_MAX) {
-        pathHistory.shift(); // Loại bỏ điểm cũ nhất
-    }
-    
-    // Cập nhật số điểm
-    document.getElementById('path-points').textContent = pathHistory.length;
-}
-
-// Cập nhật hiển thị vị trí
 function updatePositionDisplay(x, y) {
     const posXElement = document.getElementById('position-x');
     const posYElement = document.getElementById('position-y');
     
-    if (posXElement) posXElement.textContent = Math.round(x); // Làm tròn số nguyên cho mm
-    if (posYElement) posYElement.textContent = Math.round(y); // Làm tròn số nguyên cho mm
+    if (posXElement) posXElement.textContent = Math.round(x);
+    if (posYElement) posYElement.textContent = Math.round(y);
 }
 
-// Cập nhật trạng thái kết nối
 function updateConnectionStatus(status) {
     const statusElement = document.getElementById('wifi-status');
     if (statusElement) {
@@ -299,7 +494,6 @@ function updateConnectionStatus(status) {
     }
 }
 
-// Thay đổi kích thước canvas
 function resizeCanvas() {
     const container = mapCanvas.parentElement;
     canvasWidth = container.clientWidth;
@@ -308,117 +502,97 @@ function resizeCanvas() {
     mapCanvas.width = canvasWidth;
     mapCanvas.height = canvasHeight;
     
-    // Tính tỷ lệ dựa trên kích thước và zoom
     updateScale();
-    
-    // Vẽ lại bản đồ
     drawMap();
 }
 
-// Cập nhật tỷ lệ khi thay đổi kích thước hoặc zoom
 function updateScale() {
     scaleX = (canvasWidth / FIELD_WIDTH) * zoomLevel;
     scaleY = (canvasHeight / FIELD_HEIGHT) * zoomLevel;
 }
 
-// Thay đổi mức độ zoom
 function changeZoom(factor) {
     zoomLevel *= factor;
     
-    // Giới hạn zoom
     if (zoomLevel < 0.5) zoomLevel = 0.5;
     if (zoomLevel > 5) zoomLevel = 5;
     
-    // Cập nhật tỷ lệ
     updateScale();
-    
-    // Vẽ lại bản đồ
     drawMap();
 }
 
-// Vẽ bản đồ
 function drawMap() {
     if (!mapCtx) return;
     
-    // Xóa canvas
     mapCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-    
-    // Lưu trạng thái
     mapCtx.save();
     
-    // Áp dụng transform để zoom và pan
     mapCtx.translate(canvasWidth / 2 + offsetX, canvasHeight / 2 + offsetY);
     mapCtx.scale(zoomLevel, zoomLevel);
     mapCtx.translate(-canvasWidth / 2, -canvasHeight / 2);
     
-    // Vẽ khung sân
-    mapCtx.strokeStyle = '#333';
-    mapCtx.lineWidth = 2;
-    
-    // Tính toán kích thước và vị trí của hình chữ nhật
     const fieldPixelWidth = FIELD_WIDTH * (canvasWidth / FIELD_WIDTH);
     const fieldPixelHeight = FIELD_HEIGHT * (canvasHeight / FIELD_HEIGHT);
     const fieldX = (canvasWidth - fieldPixelWidth) / 2;
     const fieldY = (canvasHeight - fieldPixelHeight) / 2;
     
+    // Draw field boundary
+    mapCtx.strokeStyle = '#333';
+    mapCtx.lineWidth = 2;
     mapCtx.strokeRect(fieldX, fieldY, fieldPixelWidth, fieldPixelHeight);
     
-    // Vẽ lưới
+    // Draw grid
     drawGrid(fieldX, fieldY, fieldPixelWidth, fieldPixelHeight);
     
-    // Vẽ lịch sử đường đi
+    // Draw path history (optimized)
     drawPathHistory(fieldX, fieldY);
     
-    // Vẽ vị trí robot
+    // Draw robot position
     drawRobotPosition(fieldX, fieldY);
     
-    // Khôi phục trạng thái
     mapCtx.restore();
     
-    // Thêm thông báo về hệ toạ độ và đơn vị
+    // Add coordinate system info
     mapCtx.fillStyle = '#333';
     mapCtx.font = 'italic 10px Arial';
     mapCtx.fillText('*Gốc toạ độ (0,0) ở góc dưới bên phải. Đơn vị: milimet (mm)', fieldX + 5, fieldY + 15);
+    
+    // Add memory usage info
+    const memUsage = getMemoryUsage();
+    mapCtx.fillText(`Memory: ${memUsage.totalKB} KB (${pathCount}/${PATH_HISTORY_MAX} points)`, fieldX + 5, fieldY + 30);
 }
 
-// Vẽ lưới
 function drawGrid(fieldX, fieldY, fieldWidth, fieldHeight) {
-    const gridSize = 1000; // 1000mm = 1m
+    const gridSize = 1000;
     const pixelsPerMeterX = fieldWidth / FIELD_WIDTH;
     const pixelsPerMeterY = fieldHeight / FIELD_HEIGHT;
     
-    // Vẽ lưới thường (mỏng)
     mapCtx.strokeStyle = '#ddd';
     mapCtx.lineWidth = 0.5;
     
-    // Vẽ lưới dọc - với nhãn đảo ngược
+    // Vertical grid lines
     for (let x = 0; x <= FIELD_WIDTH; x += gridSize) {
         const pixelX = fieldX + x * pixelsPerMeterX;
-        
         mapCtx.beginPath();
         mapCtx.moveTo(pixelX, fieldY);
         mapCtx.lineTo(pixelX, fieldY + fieldHeight);
         mapCtx.stroke();
         
-        // Vẽ nhãn trục X - đảo ngược giá trị
         if (x % 5000 === 0 || x === FIELD_WIDTH) {
             mapCtx.fillStyle = '#666';
             mapCtx.font = '10px Arial';
-            // Hiển thị giá trị đảo ngược (FIELD_WIDTH - x)
             mapCtx.fillText(`${(FIELD_WIDTH - x)}mm`, pixelX + 2, fieldY + fieldHeight - 2);
         }
     }
     
-    // Vẽ lưới ngang - không thay đổi
+    // Horizontal grid lines
     for (let y = 0; y <= FIELD_HEIGHT; y += gridSize) {
         const pixelY = fieldY + y * pixelsPerMeterY;
-        
         mapCtx.beginPath();
         mapCtx.moveTo(fieldX, pixelY);
         mapCtx.lineTo(fieldX + fieldWidth, pixelY);
         mapCtx.stroke();
         
-        // Vẽ nhãn trục Y
         if (y % 5000 === 0 || y === FIELD_HEIGHT) {
             mapCtx.fillStyle = '#666';
             mapCtx.font = '10px Arial';
@@ -426,76 +600,37 @@ function drawGrid(fieldX, fieldY, fieldWidth, fieldHeight) {
         }
     }
     
-    // Vẽ đường trục chính giữa (đậm hơn và màu khác)
-    mapCtx.strokeStyle = '#7b1fa2'; // Màu tím phù hợp với theme
+    // Center lines
+    mapCtx.strokeStyle = '#7b1fa2';
     mapCtx.lineWidth = 1.5;
     
-    // Đường dọc chính giữa (tại X = FIELD_WIDTH/2)
     const centerX = fieldX + (FIELD_WIDTH / 2) * pixelsPerMeterX;
     mapCtx.beginPath();
     mapCtx.moveTo(centerX, fieldY);
     mapCtx.lineTo(centerX, fieldY + fieldHeight);
     mapCtx.stroke();
     
-    // Đường ngang chính giữa (tại Y = FIELD_HEIGHT/2)
     const centerY = fieldY + (FIELD_HEIGHT / 2) * pixelsPerMeterY;
     mapCtx.beginPath();
     mapCtx.moveTo(fieldX, centerY);
     mapCtx.lineTo(fieldX + fieldWidth, centerY);
     mapCtx.stroke();
-    
-    // Thêm nhãn cho đường chính giữa - điều chỉnh giá trị X
-    mapCtx.fillStyle = '#7b1fa2';
-    mapCtx.font = 'bold 10px Arial';
-    mapCtx.fillText(`Giữa (${FIELD_WIDTH/2}mm)`, centerX + 3, fieldY + 12);
-    mapCtx.fillText(`Giữa (${FIELD_HEIGHT/2}mm)`, fieldX + 3, centerY - 5);
 }
 
-// Vẽ lịch sử đường đi
-function drawPathHistory(fieldX, fieldY) {
-    if (pathHistory.length < 2) return;
-    
-    const pixelsPerMeterX = (canvasWidth / FIELD_WIDTH);
-    const pixelsPerMeterY = (canvasHeight / FIELD_HEIGHT);
-    
-    mapCtx.strokeStyle = '#3498DB';
-    mapCtx.lineWidth = 2;
-    mapCtx.beginPath();
-    
-    // Điểm đầu tiên - chuyển đổi toạ độ X
-    const startX = fieldX + (FIELD_WIDTH - pathHistory[0].x) * pixelsPerMeterX;
-    const startY = fieldY + (FIELD_HEIGHT - pathHistory[0].y) * pixelsPerMeterY;
-    mapCtx.moveTo(startX, startY);
-    
-    // Vẽ đường nối các điểm
-    for (let i = 1; i < pathHistory.length; i++) {
-        // Chuyển đổi toạ độ X
-        const x = fieldX + (FIELD_WIDTH - pathHistory[i].x) * pixelsPerMeterX;
-        const y = fieldY + (FIELD_HEIGHT - pathHistory[i].y) * pixelsPerMeterY;
-        mapCtx.lineTo(x, y);
-    }
-    
-    mapCtx.stroke();
-}
-
-// Vẽ vị trí robot
 function drawRobotPosition(fieldX, fieldY) {
     const pixelsPerMeterX = (canvasWidth / FIELD_WIDTH);
     const pixelsPerMeterY = (canvasHeight / FIELD_HEIGHT);
     
-    // Thay đổi cách tính toạ độ X - lấy từ bên phải
     const robotX = fieldX + (FIELD_WIDTH - robotPosition.x) * pixelsPerMeterX;
     const robotY = fieldY + (FIELD_HEIGHT - robotPosition.y) * pixelsPerMeterY;
     const radiusPixels = ROBOT_RADIUS * pixelsPerMeterX;
     
-    // Vẽ hình tròn đại diện cho robot
-    mapCtx.strokeStyle = '#FF5733'; // Màu viền cho robot
+    mapCtx.strokeStyle = '#FF5733';
     mapCtx.beginPath();
     mapCtx.arc(robotX, robotY, radiusPixels, 0, Math.PI * 2);
-    mapCtx.stroke(); // Thêm stroke để viền rõ ràng
+    mapCtx.stroke();
 
-    // Vẽ dấu cộng tại tâm
-    mapCtx.strokeStyle = '#FF5733'; // Màu viền cho dấu cộng    
+    mapCtx.strokeStyle = '#FF5733';
     mapCtx.lineWidth = 2;
     mapCtx.beginPath();
     mapCtx.moveTo(robotX - 5, robotY);
@@ -505,27 +640,6 @@ function drawRobotPosition(fieldX, fieldY) {
     mapCtx.stroke();
 }
 
-// Xóa lịch sử đường đi
-function resetPath() {
-    // Thêm xác nhận trước khi xóa
-    if (pathHistory.length > 0) {
-        const confirmReset = confirm('Are you sure you want to reset the path? This action cannot be undone.');
-        if (!confirmReset) return;
-    }
-    
-    pathHistory = [];
-    totalDistance = 0;
-    document.getElementById('path-points').textContent = '0';
-    document.getElementById('total-distance').textContent = '0.00';
-    drawMap();
-    
-    // Cập nhật trạng thái ghi
-    if (isRecording) {
-        stopRecording();
-    }
-}
-
-// Căn giữa khung nhìn
 function centerView() {
     offsetX = 0;
     offsetY = 0;
@@ -534,19 +648,13 @@ function centerView() {
     drawMap();
 }
 
-// Thêm các hàm điều khiển ghi
-let isRecording = false;
-
 function startRecording() {
-    // Chỉ bắt đầu ghi nếu chưa ghi
     if (!isRecording) {
         isRecording = true;
         
-        // Cập nhật UI
         document.getElementById('start-record-btn').disabled = true;
         document.getElementById('stop-record-btn').disabled = false;
         
-        // Cập nhật chỉ báo trạng thái ghi
         const statusElement = document.querySelector('.recording-status');
         statusElement.classList.remove('inactive');
         statusElement.classList.add('active');
@@ -557,15 +665,12 @@ function startRecording() {
 }
 
 function stopRecording() {
-    // Chỉ dừng ghi nếu đang ghi
     if (isRecording) {
         isRecording = false;
         
-        // Cập nhật UI
         document.getElementById('start-record-btn').disabled = false;
         document.getElementById('stop-record-btn').disabled = true;
         
-        // Cập nhật chỉ báo trạng thái ghi
         const statusElement = document.querySelector('.recording-status');
         statusElement.classList.remove('active');
         statusElement.classList.add('inactive');
@@ -575,55 +680,46 @@ function stopRecording() {
     }
 }
 
-// Thêm hàm xuất ảnh từ canvas
 function exportImage() {
     try {
-        // Vẽ lại bản đồ với chất lượng cao
         const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = mapCanvas.width * 2; // Kích thước gấp đôi để chất lượng cao
+        tempCanvas.width = mapCanvas.width * 2;
         tempCanvas.height = mapCanvas.height * 2;
         const tempCtx = tempCanvas.getContext('2d');
         
-        // Áp dụng các transform tương tự như canvas gốc
-        tempCtx.scale(2, 2); // Tăng độ phân giải
+        tempCtx.scale(2, 2);
         tempCtx.translate(canvasWidth / 2 + offsetX, canvasHeight / 2 + offsetY);
         tempCtx.scale(zoomLevel, zoomLevel);
         tempCtx.translate(-canvasWidth / 2, -canvasHeight / 2);
         
-        // Tính toán kích thước và vị trí của hình chữ nhật
         const fieldPixelWidth = FIELD_WIDTH * (canvasWidth / FIELD_WIDTH);
         const fieldPixelHeight = FIELD_HEIGHT * (canvasHeight / FIELD_HEIGHT);
         const fieldX = (canvasWidth - fieldPixelWidth) / 2;
         const fieldY = (canvasHeight - fieldPixelHeight) / 2;
         
-        // Vẽ nền
         tempCtx.fillStyle = '#f0f0f0';
         tempCtx.fillRect(0, 0, canvasWidth, canvasHeight);
         
-        // Vẽ khung
         tempCtx.strokeStyle = '#333';
         tempCtx.lineWidth = 2;
         tempCtx.strokeRect(fieldX, fieldY, fieldPixelWidth, fieldPixelHeight);
         
-        // Vẽ lưới
+        // Draw grid on export canvas
         const pixelsPerMeterX = fieldPixelWidth / FIELD_WIDTH;
         const pixelsPerMeterY = fieldPixelHeight / FIELD_HEIGHT;
         
         tempCtx.strokeStyle = '#ddd';
         tempCtx.lineWidth = 0.5;
         
-        // Vẽ lưới dọc và ngang - điều chỉnh cho milimet
-        const gridSize = 1000; // 1000mm = 1m
+        const gridSize = 1000;
         
         for (let x = 0; x <= FIELD_WIDTH; x += gridSize) {
             const pixelX = fieldX + x * pixelsPerMeterX;
-            
             tempCtx.beginPath();
             tempCtx.moveTo(pixelX, fieldY);
             tempCtx.lineTo(pixelX, fieldY + fieldPixelHeight);
             tempCtx.stroke();
             
-            // Vẽ nhãn X
             if (x % 5000 === 0 || x === FIELD_WIDTH) {
                 tempCtx.fillStyle = '#666';
                 tempCtx.font = '12px Arial';
@@ -638,7 +734,6 @@ function exportImage() {
             tempCtx.lineTo(fieldX + fieldPixelWidth, pixelY);
             tempCtx.stroke();
             
-            // Vẽ nhãn Y
             if (y % 5000 === 0 || y === FIELD_HEIGHT) {
                 tempCtx.fillStyle = '#666';
                 tempCtx.font = '12px Arial';
@@ -646,72 +741,68 @@ function exportImage() {
             }
         }
         
-        // Vẽ đường trục chính giữa
-        tempCtx.strokeStyle = '#7b1fa2'; // Màu tím phù hợp với theme
+        // Draw center lines
+        tempCtx.strokeStyle = '#7b1fa2';
         tempCtx.lineWidth = 1.5;
         
-        // Đường dọc chính giữa
         const centerX = fieldX + (FIELD_WIDTH / 2) * pixelsPerMeterX;
         tempCtx.beginPath();
         tempCtx.moveTo(centerX, fieldY);
         tempCtx.lineTo(centerX, fieldY + fieldPixelHeight);
         tempCtx.stroke();
         
-        // Đường ngang chính giữa
         const centerY = fieldY + (FIELD_HEIGHT / 2) * pixelsPerMeterY;
         tempCtx.beginPath();
         tempCtx.moveTo(fieldX, centerY);
         tempCtx.lineTo(fieldX + fieldPixelWidth, centerY);
         tempCtx.stroke();
         
-        // Thêm nhãn cho đường chính giữa
         tempCtx.fillStyle = '#7b1fa2';
         tempCtx.font = 'bold 12px Arial';
         tempCtx.fillText(`Giữa (${FIELD_WIDTH/2}mm)`, centerX + 5, fieldY + 16);
         tempCtx.fillText(`Giữa (${FIELD_HEIGHT/2}mm)`, fieldX + 5, centerY - 8);
         
-        // VẼ ĐƯỜNG ĐI CỦA ROBOT (phần bị thiếu)
-        if (pathHistory.length >= 2) {
+        // Draw path using memory-efficient method
+        if (pathCount >= 2) {
             tempCtx.strokeStyle = '#3498DB';
             tempCtx.lineWidth = 3;
             tempCtx.beginPath();
             
-            // Điểm đầu tiên
-            const startX = fieldX + (FIELD_WIDTH - pathHistory[0].x) * pixelsPerMeterX;
-            const startY = fieldY + (FIELD_HEIGHT - pathHistory[0].y) * pixelsPerMeterY;
+            const firstPoint = getPathPoint(0);
+            const startX = fieldX + (FIELD_WIDTH - firstPoint.x) * pixelsPerMeterX;
+            const startY = fieldY + (FIELD_HEIGHT - firstPoint.y) * pixelsPerMeterY;
             tempCtx.moveTo(startX, startY);
             
-            // Vẽ đường nối các điểm
-            for (let i = 1; i < pathHistory.length; i++) {
-                const x = fieldX + (FIELD_WIDTH - pathHistory[i].x) * pixelsPerMeterX;
-                const y = fieldY + (FIELD_HEIGHT - pathHistory[i].y) * pixelsPerMeterY;
+            for (let i = 1; i < pathCount; i++) {
+                const point = getPathPoint(i);
+                const x = fieldX + (FIELD_WIDTH - point.x) * pixelsPerMeterX;
+                const y = fieldY + (FIELD_HEIGHT - point.y) * pixelsPerMeterY;
                 tempCtx.lineTo(x, y);
             }
             
             tempCtx.stroke();
             
-            // Vẽ điểm bắt đầu và kết thúc
-            tempCtx.fillStyle = '#27ae60'; // Màu xanh lá cho điểm bắt đầu
+            // Start and end markers
+            tempCtx.fillStyle = '#27ae60';
             tempCtx.beginPath();
             tempCtx.arc(startX, startY, 8, 0, Math.PI * 2);
             tempCtx.fill();
             
-            // Điểm kết thúc
-            const endX = fieldX + (FIELD_WIDTH - pathHistory[pathHistory.length-1].x) * pixelsPerMeterX;
-            const endY = fieldY + (FIELD_HEIGHT - pathHistory[pathHistory.length-1].y) * pixelsPerMeterY;
-            tempCtx.fillStyle = '#e74c3c'; // Màu đỏ cho điểm kết thúc
+            const lastPoint = getPathPoint(pathCount - 1);
+            const endX = fieldX + (FIELD_WIDTH - lastPoint.x) * pixelsPerMeterX;
+            const endY = fieldY + (FIELD_HEIGHT - lastPoint.y) * pixelsPerMeterY;
+            tempCtx.fillStyle = '#e74c3c';
             tempCtx.beginPath();
             tempCtx.arc(endX, endY, 8, 0, Math.PI * 2);
             tempCtx.fill();
             
-            // Thêm nhãn start và end
             tempCtx.fillStyle = '#000';
             tempCtx.font = '12px Arial';
             tempCtx.fillText('Start', startX + 10, startY);
             tempCtx.fillText('End', endX + 10, endY);
         }
         
-        // VẼ VỊ TRÍ ROBOT HIỆN TẠI (phần bị thiếu)
+        // Draw robot position
         const robotX = fieldX + (FIELD_WIDTH - robotPosition.x) * pixelsPerMeterX;
         const robotY = fieldY + (FIELD_HEIGHT - robotPosition.y) * pixelsPerMeterY;
         const radiusPixels = ROBOT_RADIUS * pixelsPerMeterX;
@@ -721,7 +812,6 @@ function exportImage() {
         tempCtx.arc(robotX, robotY, radiusPixels, 0, Math.PI * 2);
         tempCtx.stroke();
         
-        // Vẽ dấu cộng tại tâm
         tempCtx.strokeStyle = '#FF5733';
         tempCtx.lineWidth = 3;
         tempCtx.beginPath();
@@ -731,129 +821,77 @@ function exportImage() {
         tempCtx.lineTo(robotX, robotY + 8);
         tempCtx.stroke();
         
-        // Thêm chú thích - điều chỉnh cho milimet
+        // Add info with memory stats
+        const memUsage = getMemoryUsage();
         tempCtx.fillStyle = '#333';
         tempCtx.font = '14px Arial';
         tempCtx.fillText(`Total Distance: ${totalDistance.toFixed(0)}mm`, 10, 20);
-        tempCtx.fillText(`Points: ${pathHistory.length}`, 10, 40);
-        tempCtx.fillText(`Topic: ${currentSelectedTopic || 'ALL'}`, 10, 60);
-        tempCtx.fillText(`Generated: ${new Date().toLocaleString()}`, 10, 80);
-        tempCtx.fillText(`*Gốc toạ độ (0,0) ở góc dưới bên phải`, 10, 100);
+        tempCtx.fillText(`Points: ${pathCount}/${PATH_HISTORY_MAX}`, 10, 40);
+        tempCtx.fillText(`Memory: ${memUsage.totalKB} KB (${memUsage.efficiency})`, 10, 60);
+        tempCtx.fillText(`Topic: ${currentSelectedTopic || 'ALL'}`, 10, 80);
+        tempCtx.fillText(`Generated: ${new Date().toLocaleString()}`, 10, 100);
+        tempCtx.fillText(`*Gốc toạ độ (0,0) ở góc dưới bên phải`, 10, 120);
         
-        // Thêm chú giải màu sắc
-        const legendY = 130;
+        // Legend
+        const legendY = 150;
         tempCtx.fillStyle = '#333';
         tempCtx.fillText('Chú thích:', 10, legendY);
         
-        // Màu đường đi
         tempCtx.fillStyle = '#3498DB';
         tempCtx.fillRect(10, legendY + 10, 20, 10);
         tempCtx.fillStyle = '#333';
         tempCtx.fillText('Đường đi', 35, legendY + 18);
         
-        // Màu robot
         tempCtx.fillStyle = '#FF5733';
         tempCtx.fillRect(10, legendY + 30, 20, 10);
         tempCtx.fillStyle = '#333';
         tempCtx.fillText('Vị trí robot', 35, legendY + 38);
         
-        // Điểm bắt đầu
         tempCtx.fillStyle = '#27ae60';
         tempCtx.fillRect(10, legendY + 50, 20, 10);
         tempCtx.fillStyle = '#333';
         tempCtx.fillText('Điểm bắt đầu', 35, legendY + 58);
         
-        // Điểm kết thúc
         tempCtx.fillStyle = '#e74c3c';
         tempCtx.fillRect(10, legendY + 70, 20, 10);
         tempCtx.fillStyle = '#333';
         tempCtx.fillText('Điểm kết thúc', 35, legendY + 78);
         
-        // Tạo URL cho hình ảnh
         const imageURL = tempCanvas.toDataURL('image/png');
         
-        // Tạo thẻ a để tải xuống
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = imageURL;
-        a.download = `robot_path_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+        a.download = `robot_path_${PATH_HISTORY_MAX}pts_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
         
         document.body.appendChild(a);
         a.click();
         
-        // Cleanup
-        window.setTimeout(() => {
+        setTimeout(() => {
             document.body.removeChild(a);
             URL.revokeObjectURL(imageURL);
         }, 100);
         
-        console.log('Map: Image exported successfully');
+        console.log('Map: Image exported successfully with memory stats');
     } catch (error) {
         console.error('Map: Error exporting image', error);
         alert('Failed to export image: ' + error.message);
     }
 }
 
-// Sửa đổi hàm export để hỗ trợ cả JSON và PNG
 function exportPath() {
-    // Chỉ xuất nếu có dữ liệu
-    if (pathHistory.length === 0) {
+    if (pathCount === 0) {
         alert('No path data to export.');
         return;
     }
     
-    // Hỏi người dùng muốn xuất loại file nào
     const exportType = confirm(
         'Choose export format:\nOK - Export as Image (PNG)\nCancel - Export as Data (JSON)'
     );
     
     if (exportType) {
-        // Xuất PNG
         exportImage();
     } else {
-        // Xuất JSON
         exportPathAsJSON();
-    }
-}
-
-function exportPathAsJSON() {
-    try {
-        // Tạo đối tượng dữ liệu xuất
-        const exportData = {
-            timestamp: new Date().toISOString(),
-            topic: currentSelectedTopic || 'ALL',
-            totalDistance: totalDistance,
-            unit: 'mm', // Làm rõ đơn vị là mm
-            points: pathHistory.length,
-            path: pathHistory
-        };
-        
-        // Chuyển đổi đối tượng thành chuỗi JSON
-        const jsonString = JSON.stringify(exportData, null, 2);
-        
-        // Tạo Blob và URL
-        const blob = new Blob([jsonString], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        
-        // Tạo thẻ a để tải xuống
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `robot_path_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-        
-        // Thêm vào DOM, trigger click, và xóa
-        document.body.appendChild(a);
-        a.click();
-        
-        // Cleanup
-        window.setTimeout(() => {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, 100);
-        
-        console.log('Map: Path data exported successfully');
-    } catch (error) {
-        console.error('Map: Error exporting path data', error);
-        alert('Failed to export path data: ' + error.message);
     }
 }
