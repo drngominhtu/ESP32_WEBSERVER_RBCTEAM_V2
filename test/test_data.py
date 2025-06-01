@@ -8,7 +8,7 @@ from datetime import datetime
 # Cấu hình MQTT - Fixed topic
 MQTT_BROKER = "192.168.5.1"  # Thay đổi thành địa chỉ broker của bạn
 MQTT_PORT = 1883
-MQTT_TOPIC = "Robot1/data"  # Fixed topic
+MQTT_TOPIC = "Alpha1/data"  # Fixed topic
 MQTT_USERNAME = None  # Thêm username nếu cần
 MQTT_PASSWORD = None  # Thêm password nếu cần
 
@@ -129,12 +129,12 @@ class RobotDataSimulator:
         # Kiểm tra và bounce nếu chạm biên
         if new_x <= 0 or new_x >= FIELD_WIDTH:
             self.velocity_x = -self.velocity_x * random.uniform(0.7, 1.0)
-            new_x = max(50, min(FIELD_WIDTH - 50, new_x))  # Giữ cách biên 50mm
-        
+            new_x = max(400, min(FIELD_WIDTH - 400, new_x))  # Giữ cách biên 400mm
+
         if new_y <= 0 or new_y >= FIELD_HEIGHT:
             self.velocity_y = -self.velocity_y * random.uniform(0.7, 1.0)
-            new_y = max(50, min(FIELD_HEIGHT - 50, new_y))
-        
+            new_y = max(400, min(FIELD_HEIGHT - 400, new_y))
+
         # Đảm bảo encoder không âm và không vượt quá giới hạn
         self.encoder_x = max(0, min(FIELD_WIDTH - 1, new_x))
         self.encoder_y = max(0, min(FIELD_HEIGHT - 1, new_y))
